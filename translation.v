@@ -12,6 +12,65 @@ Import UnscopedNotations.
 Notation lup := nth_error.
 
 
+(** Reduction and conversion **)
+
+Inductive is_value : prog -> Prop :=
+| iv_var x : is_value (var_prog x)
+| iv_tyabs k e : is_value (tyabs k e)
+| iv_tmapp t e : is_value (tmabs t e)
+| iv_ret e : is_value (ret e).
+
+Inductive red_prog : prog -> prog -> Prop :=
+| rp_trans e1 e2 e3 : red_prog e1 e2 -> red_prog e2 e3 -> red_prog e1 e3
+| rp_beta k e t : red_prog (tyapp (tyabs k e) t) (subst_prog (t..) var_prog e)
+| rp_tmabs t e1 e2 : is_value e2 -> red_prog (tmapp (tmabs t e1) e2) (subst_prog var_type (e2..) e1)
+| rp_ret e1 e2 : red_prog (bind (ret e1) e2) (subst_prog var_type (e2..) e1)
+| rp_tyapp e1 e2 t : red_prog e1 e2 -> red_prog (tyapp e1 t) (tyapp e2 t)
+| rp_tmapp1 e1 e2 e : red_prog e1 e2 -> red_prog (tmapp e1 e) (tmapp e2 e)
+| rp_tmapp2 e1 e2 e : red_prog e1 e2 -> is_value e -> red_prog (tmapp e e1) (tmapp e e2)
+| rp_bind e1 e2 e : red_prog e1 e2 -> red_prog (bind e1 e) (bind e2 e).
+
+Inductive conv_type : type -> type -> Prop :=
+| cv_sym t1 t2 : conv_type t1 t2 -> conv_type t2 t1
+| cv_trans t1 t2 t3 : conv_type t1 t2 -> conv_type t2 t3 -> conv_type t1 t3
+| cv_beta k t1 t2 : conv_type (app (abs k t1) t2) (subst_type (t2..) t1)
+| cv_app1 t1 t2 t : conv_type t1 t2 -> conv_type (app t1 t) (app t2 t)
+| cv_app2 t1 t2 t : conv_type t1 t2 -> conv_type (app t t1) (app t t2)
+| cv_arrow1 t1 t2 t : conv_type t1 t2 -> conv_type (arrow t1 t) (arrow t2 t)
+| cv_arrow2 t1 t2 t : conv_type t1 t2 -> conv_type (arrow t t1) (arrow t t2)
+| cv_pi t1 t2 k : conv_type t1 t2 -> conv_type (pi k t1) (pi k t2)
+| cv_comp t1 t2 : conv_type t1 t2 -> conv_type (comp t1) (comp t2).
+
+Inductive conv_prog : prog -> prog -> Prop :=
+| cp_sym e1 e2 : conv_prog e1 e2 -> conv_prog e2 e1
+| cp_trans e1 e2 e3 : conv_prog e1 e2 -> conv_prog e2 e3 -> conv_prog e1 e3
+| cp_tyapp e t1 t2 : conv_type t1 t2 -> conv_prog (tyapp e t1) (tyapp e t2).
+
+Inductive conv_index : index -> index -> Prop :=
+| ci_sym o1 o2 : conv_index o1 o2 -> conv_index o2 o1
+| ci_trans o1 o2 o3 : conv_index o1 o2 -> conv_index o2 o3 -> conv_index o1 o3
+| ci_refb t1 t2 : conv_type t1 t2 -> conv_index (refb t1) (refb t2)
+| ci_ref_type t1 t2 o : conv_type t1 t2 -> conv_index (ref t1 o) (ref t2 o)
+| ci_ref_index o1 o2 t : conv_index o1 o2 -> conv_index (ref t o1) (ref t o2)
+| ci_univ o1 o2 k : conv_index o1 o2 -> conv_index (univ k o1) (univ k o2).
+
+Inductive conv_exp : exp -> exp -> Prop :=
+| ce_sym q1 q2 : conv_exp q1 q2 -> conv_exp q2 q1
+| ce_trans q1 q2 q3 : conv_exp q1 q2 -> conv_exp q2 q3 -> conv_exp q2 q3
+| ce_beta k q t : conv_exp (exapp (exabs k q) t) (subst_exp (t..) var_prog var_exp q)
+| ce_exabs k q1 q2 : conv_exp q1 q2 -> conv_exp (exabs k q1) (exabs k q2)
+| ce_exapp_type t1 t2 q : conv_type t1 t2 -> conv_exp (exapp q t1) (exapp q t2)
+| ce_cexp_type t1 t2 q phi : conv_type t1 t2 -> conv_exp (cexp t1 q phi) (cexp t2 q phi)
+| ce_cexp_index t q1 q2 phi : conv_index q1 q2 -> conv_exp (cexp t q1 phi) (cexp t q2 phi)
+| ce_cexp_spec t q phi psi : conv_spec phi psi -> conv_exp (cexp t q phi) (cexp t q psi)
+
+with conv_spec : spec -> spec -> Prop :=
+| cs_sym phi psi : conv_spec phi psi -> conv_spec psi phi
+| cs_trans phi psi theta : conv_spec phi psi -> conv_spec psi theta -> conv_spec phi theta
+| cs_implies1 phi1 phi2 psi : conv_spec phi1 phi2 -> conv_spec (spimplies phi1 psi) (spimplies phi2 psi)
+| cs_implies2 phi psi1 psi2 : conv_spec psi1 psi2 -> conv_spec (spimplies phi psi1) (spimplies phi psi2).
+
+
 
 (** Typing judgements **)
 
@@ -48,7 +107,7 @@ Inductive has_type (Delta : list kind) (Gamma : list type) : prog -> type -> Pro
                -> has_type Delta Gamma (var_prog x) t
 | ht_tyabs e t k : has_type (k :: Delta) (map (ren_type ↑) Gamma) e t
                    -> has_type Delta Gamma (tyabs k e) (pi k t)
-| ht_tmabs e t1 t2 : has_type Delta (t1 :: Gamma) e t2
+| ht_tmabs e t1 t2 : has_type Delta (t1 :: Gamma) e (comp t2)
                      -> has_type Delta Gamma (tmabs t1 e) (arrow t1 t2)
 | ht_ret e t : has_type Delta Gamma e t
                -> has_type Delta Gamma (ret e) (comp t)
@@ -60,7 +119,7 @@ Inductive has_type (Delta : list kind) (Gamma : list type) : prog -> type -> Pro
                        -> has_type Delta Gamma (tyapp e t2) t1[t2..]
 | ht_tmapp e1 e2 t1 t2 : has_type Delta Gamma e1 (arrow t1 t2)
                          -> has_type Delta Gamma e2 t1
-                         -> has_type Delta Gamma (tmapp e1 e2) t2.
+                         -> has_type Delta Gamma (tmapp e1 e2) (comp t2).
 
 Inductive is_index (Delta : list kind) : index -> Prop :=
 | ii_refb t : has_kind Delta t 0 -> is_index Delta (refb t)
@@ -149,18 +208,22 @@ Inductive HOPL_prv (A : list spec) : spec -> Prop :=
 | HOPL_CE phi t o e q : HOPL_prv A (spholds (cexp t o phi) q e)
                       -> HOPL_prv A (subst_spec var_type (e..) (q..) phi)
 | HOPL_MI phi e : HOPL_prv A (subst_spec var_type (e..) var_exp phi)
-                -> HOPL_prv A (after e phi)
+                -> HOPL_prv A (after (ret e) phi)
 | HOPL_ME phi e1 e2 : HOPL_prv A (after e1 (after e2 phi))
                     -> HOPL_prv A (after (bind e1 e2) phi)
 | HOPL_MM phi psi e : HOPL_prv (phi :: A) psi
                   -> HOPL_prv A (after e phi)
-                  -> HOPL_prv A (after e psi).
+                  -> HOPL_prv A (after e psi)
+| HOPL_PR phi e1 e2 : red_prog e1 e2
+                    -> HOPL_prv A (subst_spec var_type (e1..) var_exp phi)
+                    -> HOPL_prv A (subst_spec var_type (e2..) var_exp phi).
 
 Lemma HOPL_weak A A' phi :
   HOPL_prv A phi -> incl A A' -> HOPL_prv A' phi.
 Proof.
   induction 1 in A' |- *; intros HA.
   all: try unshelve (solve [econstructor; auto with datatypes]); try now econstructor.
+  eapply HOPL_PR; eauto.
 Qed.
 
 
@@ -317,6 +380,7 @@ Proof.
   - now rewrite trans_form_subst' in IHHOPL_prv.
   - assumption.
   - eapply HOL_IE; try apply IHHOPL_prv2. apply HOL_II, IHHOPL_prv1.
+  - now rewrite trans_form_subst in *.
 Qed.
 
 
@@ -363,9 +427,9 @@ Proof.
       injection H0 as []. erewrite renRen_type, extRen_type, <- renRen_type.
       * apply map_nth_error. now apply HG.
       * now intros [].
-  - apply ht_tmabs. eapply IHe; try apply H3.
+  - apply ht_tmabs. eapply (IHe _ _ _ _ _ _ (comp t2)); try apply H3.
     + intros []; cbn; intuition.
-    + intros []; cbn; try congruence. apply HG.
+    + intros []; cbn; intros; try now injection H0 as ->. now apply HG.
   - cbn. asimpl. erewrite ext_type, <- renSubst_type at 1.
     + apply ht_tyapp with k.
       * eapply IHe in H2; eauto.
@@ -479,7 +543,7 @@ Fixpoint trans_I (s : sort) (t : type) : index :=
 
 Fixpoint trans_T (phi : form) : type :=
   match phi with
-  | implies phi psi => arrow (trans_T phi) (comp (trans_T psi))
+  | implies phi psi => arrow (trans_T phi) (trans_T psi)
   | all s phi => pi s (comp (trans_T phi))
   | holds p p' => app (ttrans_T p) (ttrans_T p')
   end
@@ -547,7 +611,7 @@ with ttrans_has_kind Xi p s :
   has_sort Xi p s -> has_kind Xi (ttrans_T p) s.
 Proof.
   - induction phi in Xi |- *; inversion 1; subst.
-    + cbn. apply hk_arrow; try now apply IHphi1. now apply hk_comp, IHphi2.
+    + cbn. apply hk_arrow; try now apply IHphi1. now apply IHphi2.
     + cbn. apply hk_pi. apply hk_comp. now apply (IHphi (n :: Xi)).
     + cbn. apply hk_app with s; now apply ttrans_has_kind.
   - induction p in Xi |- *; inversion 1; subst.
@@ -616,7 +680,7 @@ Proof.
     + apply is_after with (trans_T phi2).
       * now apply IHphi2.
       * apply ht_tmapp with (trans_T phi1).
-        -- apply ht_var. reflexivity.
+        -- apply ht_var. cbn. reflexivity.
         -- apply ht_var. reflexivity.
   - cbn. apply is_tyall, is_spall; try now apply trans_is_index, hk_var.
     unfold trans_IL. rewrite trans_IL_up. apply is_after with (trans_T phi).
@@ -637,3 +701,56 @@ Proof.
       * unfold trans_IL. rewrite trans_IL_up. now apply trans_is_spec.
       * asimpl. unfold funcomp. rewrite idSubst_type; trivial. now intros [].
 Qed.
+
+
+
+(** Soundness theorem **)
+
+Fixpoint trans_SL' (Psi : list form) n : list spec :=
+  match Psi with
+  | nil => nil
+  | psi :: Psi => subst_spec var_type ((var_prog n)..) var_exp (trans_S psi) :: trans_SL' Psi (S n)
+  end.
+
+Definition trans_SL Psi :=
+  trans_SL' Psi 0.
+
+Lemma trans_SL_lup' Psi psi n i :
+  lup Psi i = Some psi -> lup (trans_SL' Psi n) i = Some (subst_spec var_type ((var_prog (n+i))..) var_exp (trans_S psi)).
+Proof.
+  induction Psi in n, i, psi |- *; destruct i; cbn; try intuition congruence.
+  - rewrite <- plus_n_O. intros [=]. congruence.
+  - intros H. rewrite (@IHPsi psi (S n) i); trivial. now rewrite <- plus_n_Sm.
+Qed.
+
+Lemma trans_SL_lup Psi psi i :
+  lup Psi i = Some psi -> lup (trans_SL Psi) i = Some (subst_spec var_type ((var_prog i)..) var_exp (trans_S psi)).
+Proof.
+  apply trans_SL_lup'.
+Qed.
+
+(*Lemma trans_S_subst phi sigma :
+  trans_S (subst_form sigma phi) = subst_spec var_type sigma var_exp (trans_S phi).*)
+
+Theorem soundness' Psi psi :
+  HOL_prv Psi psi -> exists e, HOPL_prv (trans_SL Psi) (after e (trans_S psi)).
+Proof.
+  induction 1.
+  - apply In_nth_error in H as [n Hn]. exists (ret (var_prog n)). apply HOPL_MI, HOPL_CTX.
+    apply trans_SL_lup in Hn. apply nth_error_In in Hn. assumption.
+  - admit.
+  - admit.
+  - admit.
+  - admit.
+  - destruct IHHOL_prv as [e He]. exists e. eapply HOPL_MM; eauto.
+    cbn. admit.
+  - destruct IHHOL_prv as [e He]. exists e. eapply HOPL_MM; eauto.
+    cbn. admit.
+      
+
+Theorem soundness Xi Psi psi :
+  (forall psi', In psi' (psi :: Psi) -> is_prop Xi psi') -> HOL_prv Psi psi
+  -> exists p, has_type Xi (map trans_T Psi) p (comp (trans_T psi)) /\ HOPL_prv (trans_SL Psi) (after p (trans_S psi)).
+Proof.
+Admitted.
+  
