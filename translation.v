@@ -68,7 +68,17 @@ with conv_spec : spec -> spec -> Prop :=
 | cs_sym phi psi : conv_spec phi psi -> conv_spec psi phi
 | cs_trans phi psi theta : conv_spec phi psi -> conv_spec psi theta -> conv_spec phi theta
 | cs_implies1 phi1 phi2 psi : conv_spec phi1 phi2 -> conv_spec (spimplies phi1 psi) (spimplies phi2 psi)
-| cs_implies2 phi psi1 psi2 : conv_spec psi1 psi2 -> conv_spec (spimplies phi psi1) (spimplies phi psi2).
+| cs_implies2 phi psi1 psi2 : conv_spec psi1 psi2 -> conv_spec (spimplies phi psi1) (spimplies phi psi2)
+| cs_after_prog e1 e2 phi : conv_prog e1 e2 -> conv_spec (after e1 phi) (after e2 phi)
+| cs_after_spec e phi psi : conv_spec phi psi -> conv_spec (after e phi) (after e psi)
+| cs_tyall k phi psi : conv_spec phi psi -> conv_spec (tyall k phi) (tyall k psi)
+| cs_tmall_type t1 t2 phi : conv_type t1 t2 -> conv_spec (tmall t1 phi) (tmall t2 phi)
+| cs_tmall_spec t phi psi : conv_spec phi psi -> conv_spec (tmall t phi) (tmall t psi)
+| cs_spall_index o1 o2 phi : conv_index o1 o2 -> conv_spec (spall o1 phi) (spall o2 phi)
+| cs_spall_spec o phi psi : conv_spec phi psi -> conv_spec (spall o phi) (spall o psi)
+| cs_holds_prog q1 q2 e1 e2 : conv_prog e1 e2 -> conv_spec (spholds q1 q2 e1) (spholds q1 q2 e2)
+| cs_holds_exp1 q1 q1' q2 e : conv_exp q1 q1' -> conv_spec (spholds q1 q2 e) (spholds q1' q2 e)
+| cs_holds_exp2 q1 q2 q2' e : conv_exp q2 q2' -> conv_spec (spholds q1 q2 e) (spholds q1 q2' e).
 
 
 
@@ -119,7 +129,10 @@ Inductive has_type (Delta : list kind) (Gamma : list type) : prog -> type -> Pro
                        -> has_type Delta Gamma (tyapp e t2) t1[t2..]
 | ht_tmapp e1 e2 t1 t2 : has_type Delta Gamma e1 (arrow t1 t2)
                          -> has_type Delta Gamma e2 t1
-                         -> has_type Delta Gamma (tmapp e1 e2) (comp t2).
+                         -> has_type Delta Gamma (tmapp e1 e2) (comp t2)
+| ht_conv e t1 t2 : conv_type t1 t2
+                    -> has_type Delta Gamma e t1
+                    -> has_type Delta Gamma e t2.
 
 Inductive is_index (Delta : list kind) : index -> Prop :=
 | ii_refb t : has_kind Delta t 0 -> is_index Delta (refb t)
@@ -136,9 +149,9 @@ Inductive has_index (Delta : list kind) (Gamma : list type) (Sigma : list index)
 | hi_exapp q k t o : has_index Delta Gamma Sigma q (univ k o)
                      -> has_kind Delta t k
                      -> has_index Delta Gamma Sigma (exapp q t) o[t..]
-| hi_cexp' phi t t1 t2 k o : is_spec Delta (t :: Gamma) (o :: Sigma) phi
-                           -> t = t1[t2..]
-                           -> has_index Delta Gamma Sigma (cexp t o phi) (ref (app (abs k t1) t2) o)
+| hi_conv e o1 o2 : conv_index o1 o2
+                    -> has_index Delta Gamma Sigma e o1
+                    -> has_index Delta Gamma Sigma e o2
 
 with is_spec (Delta : list kind) (Gamma : list type) (Sigma : list index) : spec -> Prop :=
 | is_implies phi psi : is_spec Delta Gamma Sigma phi
@@ -214,16 +227,20 @@ Inductive HOPL_prv (A : list spec) : spec -> Prop :=
 | HOPL_MM phi psi e : HOPL_prv (phi :: A) psi
                   -> HOPL_prv A (after e phi)
                   -> HOPL_prv A (after e psi)
-| HOPL_PR phi e1 e2 : red_prog e1 e2
+| HOPL_RED phi e1 e2 : red_prog e1 e2
                     -> HOPL_prv A (subst_spec var_type (e1..) var_exp phi)
-                    -> HOPL_prv A (subst_spec var_type (e2..) var_exp phi).
+                    -> HOPL_prv A (subst_spec var_type (e2..) var_exp phi)
+| HOPL_CONV phi psi : conv_spec phi psi
+                  -> HOPL_prv A phi
+                  -> HOPL_prv A psi.
 
 Lemma HOPL_weak A A' phi :
   HOPL_prv A phi -> incl A A' -> HOPL_prv A' phi.
 Proof.
   induction 1 in A' |- *; intros HA.
   all: try unshelve (solve [econstructor; auto with datatypes]); try now econstructor.
-  eapply HOPL_PR; eauto.
+  - eapply HOPL_RED; eauto.
+  - eapply HOPL_CONV; eauto.
 Qed.
 
 
@@ -266,28 +283,38 @@ Proof.
   induction o in sigma |- *; cbn; trivial. now rewrite IHo.
 Qed.
 
+Lemma trans_sort_conv o1 o2 :
+  conv_index o1 o2 -> trans_sort o1 = trans_sort o2.
+Proof.
+  induction 1; cbn; congruence.
+Qed.
+
+(*Scheme is_spec_ind' := Induction for is_spec Sort Prop.
+Scheme has_sort_ind' := Induction for has_sort Sort Prop.
+Combined Scheme spec_sort_mut_ind from is_spec_ind', has_sort_ind'.*)
+
 Lemma trans_form_is_prop Delta Gamma Sigma phi :
   is_spec Delta Gamma Sigma phi -> is_prop (map trans_sort Sigma) (trans_form phi)
 with trans_term_has_sort Delta Gamma Sigma q o :
   has_index Delta Gamma Sigma q o -> has_sort (map trans_sort Sigma) (trans_term q) (trans_sort o).
 Proof.
-  induction phi in Delta, Gamma, Sigma |- *; cbn; inversion 1; subst.
-  - apply ip_holds with (trans_sort o).
-    + now apply trans_term_has_sort in H4.
-    + now apply trans_term_has_sort in H5.
-  - apply ip_implies; try eapply IHphi1; try eapply IHphi2; eassumption.
-  - now apply IHphi in H2.
-  - apply IHphi in H1. erewrite map_map, map_ext in H1; try apply H1.
+  induction 1; cbn.
+  - apply ip_implies; assumption.
+  - assumption.
+  - erewrite map_map, map_ext in IHis_spec; try apply IHis_spec.
     intros. apply trans_sort_ren.
-  - now apply IHphi in H1.
-  - apply ip_all. now apply IHphi in H2.
-  - induction q in Delta, Gamma, Sigma, o |- *; cbn; inversion 1; subst.
+  - assumption.
+  - apply ip_all. assumption.
+  - eapply ip_holds.
+    + apply trans_term_has_sort in H0. apply H0.
+    + apply trans_term_has_sort in H1. apply H1.
+  - induction 1; cbn.
     + apply hs_var. now apply map_nth_error.
-    + apply hs_cterm. now apply trans_form_is_prop in H4.
-    + apply hs_cterm. now apply trans_form_is_prop in H4.
-    + apply IHq in H3. erewrite map_map, map_ext in H3; try apply H3.
-    intros. apply trans_sort_ren.
-    + rewrite trans_sort_subst. now apply IHq in H2.
+    + apply hs_cterm. apply trans_form_is_prop in H. apply H.
+    + erewrite map_map, map_ext in IHhas_index; try apply IHhas_index.
+      intros. apply trans_sort_ren.
+    + rewrite trans_sort_subst. apply IHhas_index.
+    + apply trans_sort_conv in H as <-. apply IHhas_index.
 Qed.
 
 Lemma trans_form_ren phi xi1 xi2 xi3 :
@@ -359,6 +386,21 @@ Proof.
   apply ext_form. now intros [].
 Qed.
 
+Lemma trans_form_conv phi psi :
+  conv_spec phi psi -> trans_form phi = trans_form psi
+with trans_term_conv q1 q2 :
+  conv_exp q1 q2 -> trans_term q1 = trans_term q2.
+Proof.
+  induction 1; cbn; try congruence.
+  - now apply trans_sort_conv in H as ->.
+  - now apply trans_term_conv in H as ->.
+  - now apply trans_term_conv in H as ->.
+  - induction 1; cbn; try congruence.
+    + rewrite trans_term_subst. symmetry. apply idSubst_term. reflexivity.
+    + now apply trans_sort_conv in H as ->.
+    + now apply trans_form_conv in H as ->.
+Qed.
+
 Lemma HOPL_HOL A phi :
   HOPL_prv A phi -> HOL_prv (map trans_form A) (trans_form phi).
 Proof.
@@ -381,6 +423,7 @@ Proof.
   - assumption.
   - eapply HOL_IE; try apply IHHOPL_prv2. apply HOL_II, IHHOPL_prv1.
   - now rewrite trans_form_subst in *.
+  - now apply trans_form_conv in H as <-.
 Qed.
 
 
@@ -418,6 +461,11 @@ Lemma has_type_ren Delta Delta' Gamma Gamma' xi rho e t :
   -> (forall n t', lup Gamma n = Some t' -> lup Gamma' (rho n) = Some (ren_type xi t'))
   -> has_type Delta' Gamma' (ren_prog xi rho e) (ren_type xi t).
 Proof.
+  induction 1 in xi, rho, Delta', Gamma' |- *; intros HD HG; cbn.
+  - 
+  
+
+
   induction e in Delta, Gamma, xi, rho, Delta', Gamma', t |- *; inversion 1; subst; intros HD HG; cbn.
   - apply ht_var. now apply HG.
   - apply ht_tyabs. eapply IHe; try apply H3.
