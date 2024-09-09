@@ -31,6 +31,7 @@ Inductive red_prog : prog -> prog -> Prop :=
 | rp_bind e1 e2 e : red_prog e1 e2 -> red_prog (bind e1 e) (bind e2 e).
 
 Inductive conv_type : type -> type -> Prop :=
+| ct_refl t : conv_type t t
 | ct_sym t1 t2 : conv_type t1 t2 -> conv_type t2 t1
 | ct_trans t1 t2 t3 : conv_type t1 t2 -> conv_type t2 t3 -> conv_type t1 t3
 | ct_beta k t1 t2 : conv_type (app (abs k t1) t2) (subst_type (t2..) t1)
@@ -42,11 +43,13 @@ Inductive conv_type : type -> type -> Prop :=
 | ct_comp t1 t2 : conv_type t1 t2 -> conv_type (comp t1) (comp t2).
 
 Inductive conv_prog : prog -> prog -> Prop :=
+| cp_refl e : conv_prog e e
 | cp_sym e1 e2 : conv_prog e1 e2 -> conv_prog e2 e1
 | cp_trans e1 e2 e3 : conv_prog e1 e2 -> conv_prog e2 e3 -> conv_prog e1 e3
 | cp_tyapp e t1 t2 : conv_type t1 t2 -> conv_prog (tyapp e t1) (tyapp e t2).
 
 Inductive conv_index : index -> index -> Prop :=
+| ci_refl o : conv_index o o
 | ci_sym o1 o2 : conv_index o1 o2 -> conv_index o2 o1
 | ci_trans o1 o2 o3 : conv_index o1 o2 -> conv_index o2 o3 -> conv_index o1 o3
 | ci_refb t1 t2 : conv_type t1 t2 -> conv_index (refb t1) (refb t2)
@@ -55,6 +58,7 @@ Inductive conv_index : index -> index -> Prop :=
 | ci_univ o1 o2 k : conv_index o1 o2 -> conv_index (univ k o1) (univ k o2).
 
 Inductive conv_exp : exp -> exp -> Prop :=
+| ce_refl q : conv_exp q q
 | ce_sym q1 q2 : conv_exp q1 q2 -> conv_exp q2 q1
 | ce_trans q1 q2 q3 : conv_exp q1 q2 -> conv_exp q2 q3 -> conv_exp q2 q3
 | ce_beta k q t : conv_exp (exapp (exabs k q) t) (subst_exp (t..) var_prog var_exp q)
@@ -65,6 +69,7 @@ Inductive conv_exp : exp -> exp -> Prop :=
 | ce_cexp_spec t q phi psi : conv_spec phi psi -> conv_exp (cexp t q phi) (cexp t q psi)
 
 with conv_spec : spec -> spec -> Prop :=
+| cs_refl phi : conv_spec phi phi
 | cs_sym phi psi : conv_spec phi psi -> conv_spec psi phi
 | cs_trans phi psi theta : conv_spec phi psi -> conv_spec psi theta -> conv_spec phi theta
 | cs_implies1 phi1 phi2 psi : conv_spec phi1 phi2 -> conv_spec (spimplies phi1 psi) (spimplies phi2 psi)
@@ -454,8 +459,18 @@ Qed.
 Lemma conv_type_ren t1 t2 xi :
   conv_type t1 t2 -> conv_type t1⟨xi⟩ t2⟨xi⟩.
 Proof.
-  induction 1; cbn.
-Admitted.
+  induction 1 in xi |-*; cbn.
+  - apply ct_refl.
+  - now apply ct_sym.
+  - eapply ct_trans; eauto.
+  - eapply ct_trans. apply ct_beta. asimpl. apply ct_refl.
+  - now apply ct_app1.
+  - now apply ct_app2.
+  - now apply ct_arrow1.
+  - now apply ct_arrow2.
+  - now apply ct_pi.
+  - now apply ct_comp.
+Qed.
 
 Lemma has_type_ren Delta Delta' Gamma Gamma' xi rho e t :
   has_type Delta Gamma e t
@@ -609,22 +624,21 @@ with ttrans_T (p : term) : type :=
 
 Definition swap := 0 .: (↑ >> ↑).
 
-Fixpoint trans_S (phi : form) : spec :=
+Fixpoint trans_S (phi : form) (e : prog) : spec :=
   match phi with
   | implies phi psi => tmall (trans_T phi)
-                    (spimplies (trans_S phi)
-                               (after (tmapp (var_prog 1) (var_prog 0))
-                                      (trans_S psi)))
-  | all s phi => tyall s
-                    (spall (trans_I s (var_type 0))
-                           (after (tyapp (var_prog 0) (var_type 0))
-                                  (ren_spec id swap id (trans_S phi))))
-  | holds p p' => spholds (exapp (ttrans_E p) (ttrans_T p')) (ttrans_E p') (var_prog 0)
+                        (spimplies (trans_S phi (var_prog 0))
+                                   (after (tmapp (ren_prog id ↑ e) (var_prog 0))
+                                          (trans_S psi (var_prog 0))))
+  | all s phi => tyall s (spall (trans_I s (var_type 0))
+                             (after (tyapp (ren_prog ↑ id e) (var_type 0))
+                                    (trans_S phi (var_prog 0))))
+  | holds p p' => spholds (exapp (ttrans_E p) (ttrans_T p')) (ttrans_E p') e
   end
 with ttrans_E (p : term) : exp :=
   match p with
   | var_term x => var_exp x
-  | cterm s phi => exabs s (cexp (trans_T phi) (trans_I s (var_type 0)) (trans_S phi))
+  | cterm s phi => exabs s (cexp (trans_T phi) (trans_I s (var_type 0)) (trans_S phi (var_prog 0)))
   end.
 
 
@@ -723,29 +737,30 @@ Proof.
   rewrite IHXi. now rewrite trans_I_ren.
 Qed.
 
-Lemma trans_is_spec Xi phi Delta :
-  is_prop Xi phi -> is_spec Xi (trans_T phi :: Delta) (trans_IL Xi) (trans_S phi)
+Lemma trans_is_spec Xi phi Delta e :
+  is_prop Xi phi -> has_type Xi Delta e (trans_T phi) -> is_spec Xi Delta (trans_IL Xi) (trans_S phi e)
 with ttrans_has_index Xi p s Delta :
   has_sort Xi p s -> has_index Xi Delta (trans_IL Xi) (ttrans_E p) (trans_I s (ttrans_T p)).
 Proof.
-  induction phi in Xi, Delta |- *; inversion 1; subst.
+  induction phi in Xi, Delta, e |- *; inversion 1; subst; intros HT.
   - cbn. apply is_tmall, is_implies.
-    + now apply IHphi1.
+    + apply IHphi1; trivial. now apply ht_var.
     + apply is_after with (trans_T phi2).
-      * now apply IHphi2.
+      * apply IHphi2; trivial. now apply ht_var.
       * apply ht_tmapp with (trans_T phi1).
-        -- apply ht_var. cbn. reflexivity.
+        -- rewrite <- rinstId'_type. eapply has_type_ren; try apply HT; try tauto.
+           cbn. intros. now rewrite rinstId'_type.
         -- apply ht_var. reflexivity.
   - cbn. apply is_tyall, is_spall; try now apply trans_is_index, hk_var.
     unfold trans_IL. rewrite trans_IL_up. apply is_after with (trans_T phi).
-    + cbn. apply (IHphi _ (map (ren_type ↑) Delta)) in H1. cbn in H1.
-      eapply is_spec_ren'; try apply H1. now intros [] t.
-    + replace (comp (trans_T phi)) with ((comp (trans_T phi)⟨upRen_type_type ↑⟩)[(0 __type)..]) at 2.
-      * apply ht_tyapp with n; try now apply hk_var. now apply ht_var.
+    + apply IHphi; trivial. now apply ht_var.
+    + replace (comp (trans_T phi)) with ((comp (ren_type swap (trans_T phi)))[(0 __type)..]).
+      * apply ht_tyapp with n; try now apply hk_var. cbn in HT.
+        change (pi n (comp (ren_type swap (trans_T phi)))) with ((pi n (comp (trans_T phi))) ⟨↑⟩).
+        eapply has_type_ren; try apply HT; try tauto. intros. now apply map_nth_error.
       * cbn. f_equal. asimpl. unfold funcomp. apply idSubst_type. now intros [].
-  - cbn. eapply is_holds; try apply ttrans_has_index, H3.
-    + apply ht_var. cbn. reflexivity.
-    + apply (ttrans_has_index _ _ _ (app (ttrans_T t) (ttrans_T t0) :: Delta)) in H2.
+  - cbn. eapply is_holds; try apply ttrans_has_index, H3; try apply HT.
+    apply (ttrans_has_index _ _ _ Delta) in H2.
       cbn in H2. eapply (hi_exapp (t := ttrans_T t0)) in H2.
       * cbn in H2. rewrite trans_I_subst in H2. cbn in H2. now asimpl in H2.
       * now apply ttrans_has_kind.
@@ -754,7 +769,8 @@ Proof.
     + cbn. apply hi_exabs. eapply hi_conv.
       * apply ci_ref_type, ct_sym, ct_beta.
       * asimpl. unfold funcomp. rewrite idSubst_type; trivial; try now intros [].
-        unfold trans_IL. rewrite trans_IL_up. apply hi_cexp. now apply trans_is_spec.
+        unfold trans_IL. rewrite trans_IL_up. apply hi_cexp.
+        apply trans_is_spec; trivial. now apply ht_var.
 Qed.
 
 
