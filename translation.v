@@ -22,7 +22,7 @@ Inductive is_value : prog -> Prop :=
 
 Inductive red_prog : prog -> prog -> Prop :=
 | rp_trans e1 e2 e3 : red_prog e1 e2 -> red_prog e2 e3 -> red_prog e1 e3
-| rp_beta k e t : red_prog (tyapp (tyabs k e) t) (subst_prog (t..) var_prog e)
+| rp_tyabs k e t t' : t' = subst_prog (t..) var_prog e -> red_prog (tyapp (tyabs k e) t) t'
 | rp_tmabs t e1 e2 : is_value e2 -> red_prog (tmapp (tmabs t e1) e2) (subst_prog var_type (e2..) e1)
 | rp_ret e1 e2 : red_prog (bind (ret e1) e2) (subst_prog var_type (e2..) e1)
 | rp_tyapp e1 e2 t : red_prog e1 e2 -> red_prog (tyapp e1 t) (tyapp e2 t)
@@ -233,8 +233,8 @@ Inductive HOPL_prv (A : list spec) : spec -> Prop :=
                   -> HOPL_prv A (after e phi)
                   -> HOPL_prv A (after e psi)
 | HOPL_RED phi e1 e2 : red_prog e1 e2
-                    -> HOPL_prv A (subst_spec var_type (e1..) var_exp phi)
                     -> HOPL_prv A (subst_spec var_type (e2..) var_exp phi)
+                    -> HOPL_prv A (subst_spec var_type (e1..) var_exp phi)
 | HOPL_CONV phi psi : conv_spec phi psi
                   -> HOPL_prv A phi
                   -> HOPL_prv A psi.
@@ -522,8 +522,15 @@ Qed.
 Lemma conv_index_ren o1 o2 xi :
   conv_index o1 o2 -> conv_index o1⟨xi⟩ o2⟨xi⟩.
 Proof.
-  induction 1; cbn.
-Admitted.
+  induction 1 in xi |-*; cbn.
+  - apply ci_refl.
+  - now apply ci_sym.
+  - eapply ci_trans; eauto.
+  - apply ci_refb. now apply conv_type_ren.
+  - apply ci_ref_type. now apply conv_type_ren.
+  - now apply ci_ref_index.
+  - now apply ci_univ.
+Qed.
 
 Lemma is_spec_ren Delta Delta' Gamma Gamma' Sigma Sigma' tren pren eren phi :
   is_spec Delta Gamma Sigma phi
@@ -622,8 +629,6 @@ with ttrans_T (p : term) : type :=
   | cterm s phi => abs s (trans_T phi)
   end.
 
-Definition swap := 0 .: (↑ >> ↑).
-
 Fixpoint trans_S (phi : form) (e : prog) : spec :=
   match phi with
   | implies phi psi => tmall (trans_T phi)
@@ -640,6 +645,24 @@ with ttrans_E (p : term) : exp :=
   | var_term x => var_exp x
   | cterm s phi => exabs s (cexp (trans_T phi) (trans_I s (var_type 0)) (trans_S phi (var_prog 0)))
   end.
+
+Fixpoint trans_IL' (SL : list sort) n : list index :=
+  match SL with
+  | nil => nil
+  | s :: SL => trans_I s (var_type n) :: trans_IL' SL (S n)
+  end.
+
+Definition trans_IL SL :=
+  trans_IL' SL 0.
+
+Fixpoint trans_SL' (Psi : list form) n : list spec :=
+  match Psi with
+  | nil => nil
+  | psi :: Psi => trans_S psi (var_prog n) :: trans_SL' Psi (S n)
+  end.
+
+Definition trans_SL Psi :=
+  trans_SL' Psi 0.
 
 
 
@@ -687,15 +710,6 @@ Proof.
     + cbn. apply hk_abs. now apply trans_has_kind.
 Qed.
 
-Fixpoint trans_IL' (SL : list sort) n : list index :=
-  match SL with
-  | nil => nil
-  | s :: SL => (trans_I s (var_type n)) :: trans_IL' SL (S n)
-  end.
-
-Definition trans_IL SL :=
-  trans_IL' SL 0.
-
 Lemma trans_IL_length Xi n :
   length (trans_IL' Xi n) = length Xi.
 Proof.
@@ -737,6 +751,8 @@ Proof.
   rewrite IHXi. now rewrite trans_I_ren.
 Qed.
 
+Definition swap := 0 .: (↑ >> ↑).
+
 Lemma trans_is_spec Xi phi Delta e :
   is_prop Xi phi -> has_type Xi Delta e (trans_T phi) -> is_spec Xi Delta (trans_IL Xi) (trans_S phi e)
 with ttrans_has_index Xi p s Delta :
@@ -777,17 +793,8 @@ Qed.
 
 (** Soundness theorem **)
 
-Fixpoint trans_SL' (Psi : list form) n : list spec :=
-  match Psi with
-  | nil => nil
-  | psi :: Psi => subst_spec var_type ((var_prog n)..) var_exp (trans_S psi) :: trans_SL' Psi (S n)
-  end.
-
-Definition trans_SL Psi :=
-  trans_SL' Psi 0.
-
 Lemma trans_SL_lup' Psi psi n i :
-  lup Psi i = Some psi -> lup (trans_SL' Psi n) i = Some (subst_spec var_type ((var_prog (n+i))..) var_exp (trans_S psi)).
+  lup Psi i = Some psi -> lup (trans_SL' Psi n) i = Some (trans_S psi (var_prog (n + i))).
 Proof.
   induction Psi in n, i, psi |- *; destruct i; cbn; try intuition congruence.
   - rewrite <- plus_n_O. intros [=]. congruence.
@@ -795,35 +802,140 @@ Proof.
 Qed.
 
 Lemma trans_SL_lup Psi psi i :
-  lup Psi i = Some psi -> lup (trans_SL Psi) i = Some (subst_spec var_type ((var_prog i)..) var_exp (trans_S psi)).
+  lup Psi i = Some psi -> lup (trans_SL Psi) i = Some (trans_S psi (var_prog i)).
 Proof.
   apply trans_SL_lup'.
 Qed.
 
-Lemma trans_S_subst phi sigma :
-  trans_S (subst_form sigma phi) = subst_spec (sigma >> ttrans_T) (var_prog 0 .: var_prog) (sigma >> ttrans_E) (trans_S phi).
+Lemma trans_T_ren phi sigma :
+  (trans_T phi)⟨sigma⟩ = trans_T phi⟨sigma⟩
+with ttrans_T_ren t sigma :
+  (ttrans_T t)⟨sigma⟩ = ttrans_T t⟨sigma⟩.
 Proof.
+  induction phi in sigma |- *; cbn; fold ren_term.
+  - now rewrite IHphi1, IHphi2.
+  - now rewrite <- IHphi.
+  - now rewrite !ttrans_T_ren.
+  - induction t in sigma |- *; cbn; fold ren_form; trivial.
+    now rewrite <- trans_T_ren.
+Qed.
+
+Lemma trans_T_subst phi sigma :
+  (trans_T phi)[sigma >> ttrans_T] = trans_T phi[sigma]
+with ttrans_T_subst t sigma :
+  (ttrans_T t)[sigma >> ttrans_T] = ttrans_T t[sigma].
+Proof.
+  induction phi in sigma |- *; cbn; fold subst_term.
+  - now rewrite IHphi1, IHphi2.
+  - rewrite <- IHphi. f_equal. f_equal. apply ext_type. intros []; cbn; trivial. apply ttrans_T_ren.
+  - now rewrite !ttrans_T_subst.
+  - induction t in sigma |- *; cbn; fold subst_form; trivial.
+    rewrite <- trans_T_subst. f_equal. apply ext_type. intros []; cbn; trivial. apply ttrans_T_ren.
+Qed.
+
+(*Lemma trans_S_subst' phi e sigma xi :
+  subst_spec (sigma >> ttrans_T) xi (sigma >> ttrans_E) (trans_S phi e)
+  = trans_S (subst_form sigma phi) (subst_prog (sigma >> ttrans_T) xi e).
+Proof.
+  induction phi in e, sigma, xi |- *; cbn.
+  - f_equal; try apply trans_T_subst. f_equal. 2: f_equal.
+    + change (var_prog 0) with (subst_prog (sigma >> ttrans_T) (up_prog_prog xi) (var_prog 0)) at 2.
+      rewrite <- IHphi1. apply ext_spec; try now intros [].
+Admitted.*)
+
+Lemma trans_S_ren phi x sigma :
+  ren_spec sigma id sigma (trans_S phi (var_prog x)) = trans_S (ren_form sigma phi) (var_prog x)
+with ttrans_E_ren t sigma :
+  ren_exp sigma id sigma (ttrans_E t) = ttrans_E (ren_term sigma t).
+Proof.
+  induction phi in x, sigma |- *; cbn.
+  - admit.
+  - f_equal. f_equal; try apply trans_I_ren. asimpl. unfold funcomp. f_equal.
+    rewrite <- IHphi. apply extRen_spec; trivial. now intros [].
+  - now rewrite !ttrans_E_ren, ttrans_T_ren.
+  - induction t in sigma |- *; cbn; trivial. admit.
 Admitted.
 
+Lemma trans_S_subst phi x sigma :
+  subst_spec (sigma >> ttrans_T) var_prog (sigma >> ttrans_E) (trans_S phi (var_prog x))
+  = trans_S (subst_form sigma phi) (var_prog x).
+Proof.
+  induction phi in x, sigma |- *; cbn.
+  - admit.
+  - f_equal. f_equal; try apply trans_I_subst. asimpl. unfold funcomp. f_equal.
+    rewrite <- IHphi. apply ext_spec; intros []; cbn; trivial.
+    + apply ttrans_T_ren.
+    + admit.
+Admitted.
+
+Lemma trans_S_subst_spec phi e sigma :
+  subst_spec var_type sigma var_exp (trans_S phi e) = trans_S phi (subst_prog var_type sigma e)
+with ttrans_E_subst_exp t sigma :
+  subst_exp var_type sigma var_exp (ttrans_E t) = ttrans_E t.
+Proof.
+  induction phi in e, sigma |- *; cbn.
+  - rewrite instId'_type. f_equal. f_equal. 2: f_equal.
+    + erewrite ext_spec with (tau_prog := up_prog_prog sigma).
+      rewrite IHphi1. all: reflexivity.
+    + now asimpl.
+    + erewrite ext_spec with (tau_prog := up_prog_prog (up_prog_prog sigma)).
+      rewrite IHphi2. all: reflexivity.
+  - f_equal. f_equal. 2: f_equal.
+    + rewrite idSubst_index; trivial. now intros [].
+    + now asimpl.
+    + erewrite ext_spec with (tau_prog := up_prog_prog (up_exp_prog (up_type_prog sigma))).
+      now rewrite IHphi. 2: reflexivity. all: now intros [].
+  - rewrite instId'_type. f_equal; now rewrite ttrans_E_subst_exp.
+  - induction t in sigma |- *; cbn; trivial. f_equal. f_equal.
+    + rewrite idSubst_type; trivial. now intros [].
+    + rewrite idSubst_index; trivial. now intros [].
+    + erewrite ext_spec with (tau_prog := up_prog_prog (up_exp_prog (up_type_prog sigma))).
+      now rewrite trans_S_subst_spec. 2: reflexivity. all: now intros [].
+Qed.
+
+Lemma trans_SL_ren' Psi sigma n :
+  trans_SL' (map (ren_form sigma) Psi) n = map (ren_spec sigma id sigma) (trans_SL' Psi n).
+Proof.
+  induction Psi in n |- *; cbn; trivial. now rewrite trans_S_ren, IHPsi.
+Qed.
+
+Lemma trans_SL_ren Psi sigma :
+  trans_SL (map (ren_form sigma) Psi) = map (ren_spec sigma id sigma) (trans_SL Psi).
+Proof.
+  apply trans_SL_ren'.
+Qed.
+
 Theorem soundness' Psi psi :
-  HOL_prv Psi psi -> exists e, HOPL_prv (trans_SL Psi) (after e (trans_S psi)).
+  HOL_prv Psi psi -> exists e, HOPL_prv (trans_SL Psi) (after e (trans_S psi (var_prog 0))).
 Proof.
   induction 1.
   - apply In_nth_error in H as [n Hn]. exists (ret (var_prog n)). apply HOPL_MI, HOPL_CTX.
-    apply trans_SL_lup in Hn. apply nth_error_In in Hn. assumption.
+    apply trans_SL_lup in Hn. apply nth_error_In in Hn. now rewrite trans_S_subst_spec.
   - admit.
   - admit.
-  - admit.
+  - destruct IHHOL_prv as [e He]. exists (ret (tyabs s e)).
+    apply HOPL_MI. cbn. asimpl. apply HOPL_TAI, HOPL_SAI.
+    replace (after e (trans_S phi (var_prog 0))) with
+      (subst_spec var_type (e..) var_exp (after (var_prog 0) (ren_spec id swap id (trans_S phi (var_prog 0))))) in He.
+    + apply HOPL_RED with (e1 := tyapp (tyabs s e ⟨0 .: ↑ >> S;id⟩) (var_type 0)) in He.
+      * cbn in He. asimpl in He. erewrite map_map, map_ext, <- trans_SL_ren.
+        -- erewrite ext_spec; try apply He; try now intros []. admit.
+        -- intros psi. now asimpl.
+      * apply rp_tyabs. asimpl. rewrite idSubst_prog; trivial. now intros [].
+    + cbn. asimpl. unfold funcomp. f_equal. apply idSubst_spec; now intros [].
   - admit.
   - destruct IHHOL_prv as [e He]. exists e. eapply HOPL_MM; eauto. cbn. eapply HOPL_CONV.
     + apply cs_sym, cs_holds_exp1, ce_beta.
     + cbn. apply HOPL_CI. asimpl. apply HOPL_CTX. left.
-      rewrite trans_S_subst. apply ext_spec; now intros [].
+      change (var_prog 0) with (subst_prog var_type (var_prog 0 .: var_prog) (var_prog 0)).
+      rewrite <- trans_S_subst_spec, <- trans_S_subst. asimpl. unfold funcomp.
+      apply ext_spec; trivial. intros []; trivial. now rewrite ttrans_E_subst_exp.
   - destruct IHHOL_prv as [e He]. exists e. eapply HOPL_MM; eauto. cbn. eapply HOPL_IE.
     + eapply HOPL_CONV; try (apply HOPL_CTX; now left). apply cs_holds_exp1, ce_beta.
     + cbn. apply HOPL_II. eapply HOPL_IE.
       * eapply HOPL_CE. apply HOPL_CTX. now left.
-      * apply HOPL_II, HOPL_CTX. left. rewrite trans_S_subst. asimpl. apply ext_spec; now intros [].
+      * apply HOPL_II, HOPL_CTX. left. rewrite trans_S_subst_form.
+        asimpl. apply ext_spec; now intros [].
 Admitted.
 
 Theorem soundness Xi Psi psi :
