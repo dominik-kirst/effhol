@@ -1069,7 +1069,7 @@ Proof.
     eapply HOPL_MM with (trans_S phi (var_prog 0)). 2: admit.
     eapply HOPL_IE. 2: apply HOPL_CTX; now left.
     eapply HOPL_eq. 2: reflexivity.
-    eapply HOPL_EAE with (e := var_prog 0). apply HOPL_CTX. right. cbn. now left.
+    eapply HOPL_EAE with (e := var_prog 1). apply HOPL_CTX. right. cbn. now left.
     cbn. asimpl. unfold funcomp. rewrite !trans_S_subst_spec. cbn. Search trans_S.
   - destruct IHHOL_prv as [e He]. exists (ret (tyabs s e)).
     apply HOPL_MI. cbn. asimpl. apply HOPL_TAI, HOPL_SAI.
