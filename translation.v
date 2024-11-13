@@ -24,7 +24,7 @@ Inductive red_prog : prog -> prog -> Prop :=
 | rp_trans e1 e2 e3 : red_prog e1 e2 -> red_prog e2 e3 -> red_prog e1 e3
 | rp_betaty k e t t' : t' = subst_prog (t..) var_prog e -> red_prog (tyapp (tyabs k e) t) t'
 | rp_betatm t e1 e2 e : e = subst_prog var_type (e2..) e1 -> is_value e2 -> red_prog (tmapp (tmabs t e1) e2) e
-| rp_ret e1 e2 : red_prog (bind (ret e1) e2) (subst_prog var_type (e2..) e1)
+| rp_ret e1 e2 e : e = subst_prog var_type (e1..) e2 -> red_prog (bind (ret e1) e2) e
 | rp_tyapp e1 e2 t : red_prog e1 e2 -> red_prog (tyapp e1 t) (tyapp e2 t)
 | rp_tmapp1 e1 e2 e : red_prog e1 e2 -> red_prog (tmapp e1 e) (tmapp e2 e)
 | rp_tmapp2 e1 e2 e : red_prog e1 e2 -> is_value e -> red_prog (tmapp e e1) (tmapp e e2)
@@ -227,9 +227,9 @@ Inductive HOPL_prv (A : list spec) : spec -> Prop :=
                       -> HOPL_prv A (subst_spec var_type (e..) (q..) phi)
 | HOPL_MI phi e : HOPL_prv A (subst_spec var_type (e..) var_exp phi)
                 -> HOPL_prv A (after (ret e) phi)
-| HOPL_ME phi e1 e2 : HOPL_prv A (after e1 (after e2 phi))
+| HOPL_ME phi e1 e2 : HOPL_prv A (after e1 (after e2 (ren_spec id ↑ id phi)))
                     -> HOPL_prv A (after (bind e1 e2) phi)
-| HOPL_MM phi psi e : HOPL_prv (phi :: A) psi
+| HOPL_MM phi psi e : HOPL_prv (phi :: map (ren_spec id ↑ id) A) psi
                   -> HOPL_prv A (after e phi)
                   -> HOPL_prv A (after e psi)
 | HOPL_RED phi e1 e2 : red_prog e1 e2
@@ -427,8 +427,10 @@ Proof.
   - apply HOL_CI. now rewrite trans_form_subst, trans_term_point in IHHOPL_prv.
   - rewrite trans_form_subst, trans_term_point. now apply HOL_CE in IHHOPL_prv.
   - now rewrite trans_form_subst' in IHHOPL_prv.
-  - assumption.
-  - eapply HOL_IE; try apply IHHOPL_prv2. apply HOL_II, IHHOPL_prv1.
+  - rewrite trans_form_ren' in IHHOPL_prv. assumption.
+  - eapply HOL_IE; try apply IHHOPL_prv2. apply HOL_II.
+    erewrite map_map, map_ext in IHHOPL_prv1; try apply IHHOPL_prv1.
+    intros phi'. apply trans_form_ren'.
   - now rewrite trans_form_subst in *.
   - now apply trans_form_conv in H as <-.
 Qed.
@@ -933,10 +935,117 @@ Proof.
   - apply ht_tmapp with t; now apply ht_var.
 Qed.
 
+Lemma is_value_ren e sig1 sig2 :
+  is_value e -> is_value e⟨sig1;sig2⟩.
+Proof.
+  induction 1; cbn in *; econstructor; eauto.
+Qed.
+
+Lemma red_prog_ren e1 e2 sig1 sig2 :
+  red_prog e1 e2 -> red_prog e1⟨sig1;sig2⟩ e2⟨sig1;sig2⟩.
+Proof.
+  induction 1; cbn in *.
+  - econstructor 1; eauto.
+  - econstructor 2. rewrite H. now asimpl.
+  - econstructor 3.
+    + rewrite H. now asimpl.
+    + now apply is_value_ren.
+  - econstructor 4. rewrite H. now asimpl.
+  - econstructor 5; eauto.
+  - econstructor 6; eauto.
+  - econstructor 7; eauto. now apply is_value_ren.
+  - econstructor 8; eauto.
+Qed.
+
+Lemma conv_prog_ren e1 e2 sig1 sig2 :
+  conv_prog e1 e2 -> conv_prog e1⟨sig1;sig2⟩ e2⟨sig1;sig2⟩.
+Proof.
+  induction 1.
+  - econstructor 1; eauto.
+  - econstructor 2; eauto.
+  - econstructor 3; eauto.
+  - econstructor 4; eauto. now apply conv_type_ren.
+Qed.
+
+Lemma conv_spec_ren phi psi sig1 sig2 sig3 :
+  conv_spec phi psi -> conv_spec phi⟨sig1;sig2;sig3⟩ psi⟨sig1;sig2;sig3⟩
+with conv_exp_ren q q' sig1 sig2 sig3 :
+  conv_exp q q' -> conv_exp q⟨sig1;sig2;sig3⟩ q'⟨sig1;sig2;sig3⟩.
+Proof.
+  induction 1 in sig1, sig2, sig3 |- *; cbn in *.
+  - econstructor 1; eauto.
+  - econstructor 2; eauto.
+  - econstructor 3; eauto.
+  - econstructor 4; eauto.
+  - econstructor 5; eauto.
+  - econstructor 6; eauto. now apply conv_prog_ren.
+  - econstructor 7; eauto.
+  - econstructor 8; eauto.
+  - econstructor 9; eauto. now apply conv_type_ren.
+  - econstructor 10; eauto.
+  - econstructor 11; eauto. now apply conv_index_ren.
+  - econstructor 12; eauto.
+  - econstructor 13; eauto. now apply conv_prog_ren.
+  - fold ren_exp. econstructor 14; eauto.
+  - fold ren_exp. econstructor 15; eauto.
+  - induction 1 in sig1, sig2, sig3 |- *; cbn in *.
+    + econstructor 1; eauto.
+    + econstructor 2; eauto.
+    + econstructor 3; eauto.
+    + econstructor 4; eauto. rewrite H. now asimpl.
+    + econstructor 5; eauto.
+    + econstructor 6; eauto. now apply conv_type_ren.
+    + fold ren_exp. econstructor 7; eauto. now apply conv_type_ren.
+    + fold ren_spec. econstructor 8; eauto. now apply conv_index_ren.
+    + fold ren_spec. econstructor 9; eauto.
+Qed.
+
 Lemma HOPL_ren sig1 sig2 sig3 A phi :
   HOPL_prv A phi -> HOPL_prv (map (ren_spec sig1 sig2 sig3) A) (ren_spec sig1 sig2 sig3 phi).
 Proof.
-Admitted.
+  induction 1 in sig1, sig2, sig3 |- * ; cbn in *.
+  - constructor. now apply in_map.
+  - econstructor 2. eauto.
+  - econstructor 3; eauto.
+  - econstructor 4. eapply HOPL_eq. 3: reflexivity.
+    + apply IHHOPL_prv.
+    + rewrite !map_map. apply map_ext. intros psi. now asimpl.
+  - eapply HOPL_eq. 2: reflexivity.
+    + econstructor 5 with (t := t⟨sig1⟩). apply IHHOPL_prv.
+    + cbn. now asimpl.
+  - econstructor 6. eapply HOPL_eq. 3: reflexivity.
+    + apply IHHOPL_prv.
+    + rewrite !map_map. apply map_ext. intros psi. now asimpl.
+  - eapply HOPL_eq. 2: reflexivity.
+    + econstructor 7 with (e := ren_prog sig1 sig2 e). apply IHHOPL_prv.
+    + cbn. now asimpl.
+  - econstructor 8. eapply HOPL_eq. 3: reflexivity.
+    + apply IHHOPL_prv.
+    + rewrite !map_map. apply map_ext. intros psi. now asimpl.
+  - eapply HOPL_eq. 2: reflexivity.
+    + econstructor 9 with (q := ren_exp sig1 sig2 sig3 q). apply IHHOPL_prv.
+    + cbn. now asimpl.
+  - econstructor 10. eapply HOPL_eq. 2: reflexivity.
+    + apply IHHOPL_prv.
+    + now asimpl.
+  - eapply HOPL_eq. 2: reflexivity.
+    + econstructor 11. apply IHHOPL_prv.
+    + now asimpl.
+  - constructor 12. eapply HOPL_eq. 2: reflexivity.
+    + apply IHHOPL_prv.
+    + now asimpl.
+  - constructor 13. eapply HOPL_eq. 2: reflexivity.
+    + apply IHHOPL_prv.
+    + cbn. now asimpl.
+  - econstructor 14. 2: apply IHHOPL_prv2. eapply HOPL_eq; try apply IHHOPL_prv1.
+    2: reflexivity. f_equal. rewrite !map_map. apply map_ext. intros phi1. now asimpl.
+  - eapply HOPL_eq with (phi := subst_spec var_type ((ren_prog sig1 sig2 e1)..) var_exp (ren_spec sig1 (upRen_prog_prog sig2) sig3 phi)).
+    2: reflexivity. econstructor 15 with (e2 := ren_prog sig1 sig2 e2).
+    + now apply red_prog_ren.
+    + eapply HOPL_eq. 2: reflexivity. apply IHHOPL_prv. now asimpl.
+    + now asimpl.
+  - econstructor 16; try apply IHHOPL_prv. now apply conv_spec_ren.
+Qed.
 
 Theorem soundness' Psi psi :
   HOL_prv Psi psi -> exists e, HOPL_prv (trans_SL Psi) (after e (trans_S psi (var_prog 0))).
@@ -961,7 +1070,7 @@ Proof.
     eapply HOPL_IE. 2: apply HOPL_CTX; now left.
     eapply HOPL_eq. 2: reflexivity.
     eapply HOPL_EAE with (e := var_prog 1). apply HOPL_CTX. right. cbn. now left.
-    cbn. asimpl. unfold funcomp. rewrite !trans_S_subst_spec. cbn.
+    cbn. asimpl. unfold funcomp. rewrite !trans_S_subst_spec. cbn. Search trans_S.
   - destruct IHHOL_prv as [e He]. exists (ret (tyabs s e)).
     apply HOPL_MI. cbn. asimpl. apply HOPL_TAI, HOPL_SAI.
     replace (after e (trans_S phi (var_prog 0))) with
