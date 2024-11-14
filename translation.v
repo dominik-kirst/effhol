@@ -201,6 +201,8 @@ Qed.
 
 (** HOPL deduction system **)
 
+Definition swap := 0 .: (↑ >> ↑).
+
 Inductive HOPL_prv (A : list spec) : spec -> Prop :=
 | HOPL_CTX phi : In phi A
                -> HOPL_prv A phi
@@ -227,7 +229,7 @@ Inductive HOPL_prv (A : list spec) : spec -> Prop :=
                       -> HOPL_prv A (subst_spec var_type (e..) (q..) phi)
 | HOPL_MI phi e : HOPL_prv A (subst_spec var_type (e..) var_exp phi)
                 -> HOPL_prv A (after (ret e) phi)
-| HOPL_ME phi e1 e2 : HOPL_prv A (after e1 (after e2 (ren_spec id ↑ id phi)))
+| HOPL_ME phi e1 e2 : HOPL_prv A (after e1 (after e2 (ren_spec id swap id phi)))
                     -> HOPL_prv A (after (bind e1 e2) phi)
 | HOPL_MM phi psi e : HOPL_prv (phi :: map (ren_spec id ↑ id) A) psi
                   -> HOPL_prv A (after e phi)
@@ -637,14 +639,12 @@ with ttrans_T (p : term) : type :=
   | cterm s phi => abs s (trans_T phi)
   end.
 
-Definition swap := 0 .: (↑ >> ↑).
-
 Fixpoint trans_S (phi : form) (e : prog) : spec :=
   match phi with
   | implies phi psi => tmall (trans_T phi)
-                        (spimplies (trans_S phi (var_prog 0))
+                        (spimplies (ren_spec id (0 .: ↑) id (trans_S phi (var_prog 0)))
                                    (after (tmapp (ren_prog id ↑ e) (var_prog 0))
-                                          (ren_spec id swap id (trans_S psi (var_prog 0)))))
+                                          (ren_spec id (0 .: (↑ >> ↑)) id (trans_S psi (var_prog 0)))))
   | all s phi => tyall s (spall (trans_I s (var_type 0))
                              (after (tyapp (ren_prog ↑ id e) (var_type 0))
                                     (trans_S phi (var_prog 0))))
@@ -655,6 +655,8 @@ with ttrans_E (p : term) : exp :=
   | var_term x => var_exp x
   | cterm s phi => exabs s (cexp (trans_T phi) (trans_I s (var_type 0)) (trans_S phi (var_prog 0)))
   end.
+
+Compute (trans_S (implies (holds (var_term 0) (var_term 1)) (holds (var_term 0) (var_term 1))) (var_prog 0)).
 
 Fixpoint trans_IL' (SL : list sort) n : list index :=
   match SL with
@@ -734,7 +736,7 @@ with ttrans_E_ren t sigma :
 Proof.
   induction phi in x, sigma |- *; cbn.
   - rewrite trans_T_ren. f_equal. f_equal.
-    + rewrite <- IHphi1. apply extRen_spec; try reflexivity. now intros [].
+    + rewrite <- IHphi1. now asimpl.
     + f_equal. rewrite <- IHphi2. now asimpl.
   - f_equal. f_equal; try apply trans_I_ren. asimpl. unfold funcomp. f_equal.
     rewrite <- IHphi. apply extRen_spec; trivial. now intros [].
@@ -764,7 +766,7 @@ with ttrans_E_subst_exp t sigma :
 Proof.
   induction phi in e, sigma |- *; cbn.
   - rewrite instId'_type. f_equal. f_equal. 2: f_equal.
-    + asimpl. unfold funcomp. now rewrite IHphi1.
+    + asimpl. unfold funcomp. rewrite rinstInst'_spec. now rewrite !IHphi1.
     + now asimpl.
     + asimpl. unfold funcomp. rewrite rinstInst'_spec. now rewrite !IHphi2.
   - f_equal. f_equal. 2: f_equal.
@@ -869,7 +871,7 @@ with ttrans_has_index Xi p s Delta :
 Proof.
   induction phi in Xi, Delta, e |- *; inversion 1; subst; intros HT.
   - cbn. apply is_tmall, is_implies.
-    + apply IHphi1; trivial. now apply ht_var.
+    + rewrite rinstInst'_spec. rewrite trans_S_subst_spec. apply IHphi1; trivial. now apply ht_var.
     + apply is_after with (trans_T phi2).
       * rewrite rinstInst'_spec, trans_S_subst_spec. cbn. apply IHphi2; trivial. now apply ht_var.
       * apply ht_tmapp with (trans_T phi1).
@@ -1064,13 +1066,17 @@ Proof.
       * apply rp_betatm; try apply iv_var. asimpl. rewrite idSubst_prog; trivial. now intros [].
     + cbn. asimpl. unfold funcomp. f_equal. apply idSubst_spec; try now intros [].
   - destruct IHHOL_prv1 as [e1 H1], IHHOL_prv2 as [e2 H2].
-    exists (bind e1 (bind e2 (tmapp (var_prog 0) (var_prog 1)))).
+    exists (bind e1 (bind e2⟨id;S⟩ (tmapp (var_prog 1) (var_prog 0)))).
     apply HOPL_ME. eapply HOPL_MM; try apply H1. apply HOPL_ME.
-    eapply HOPL_MM with (trans_S phi (var_prog 0)). 2: admit.
+    eapply HOPL_MM with (trans_S phi (var_prog 0)).
+    2: { eapply HOPL_weak. eapply HOPL_eq. apply (@HOPL_ren id S id). apply H2.
+         reflexivity. cbn. now rewrite rinstInst'_spec, trans_S_subst_spec. firstorder. }
     eapply HOPL_IE. 2: apply HOPL_CTX; now left.
     eapply HOPL_eq. 2: reflexivity.
-    eapply HOPL_EAE with (e := var_prog 1). apply HOPL_CTX. right. cbn. now left.
-    cbn. asimpl. unfold funcomp. rewrite !trans_S_subst_spec. cbn. Search trans_S.
+    eapply HOPL_EAE with (e := var_prog 0). apply HOPL_CTX.
+    right. cbn. now left. cbn. f_equal.
+    + asimpl. cbn. unfold funcomp. now rewrite trans_S_subst_spec.
+    + asimpl. cbn. unfold funcomp. now rewrite rinstInst'_spec, !trans_S_subst_spec.
   - destruct IHHOL_prv as [e He]. exists (ret (tyabs s e)).
     apply HOPL_MI. cbn. asimpl. apply HOPL_TAI, HOPL_SAI.
     replace (after e (trans_S phi (var_prog 0))) with
@@ -1090,7 +1096,8 @@ Proof.
     + cbn. reflexivity.
     + cbn. f_equal.
       * now asimpl.
-      * rewrite substSubst_spec, <- trans_S_subst. apply ext_spec; intros []; cbn; trivial.
+      * rewrite substSubst_spec, <- trans_S_subst.
+        rewrite substRen_spec. apply ext_spec; intros []; cbn; trivial.
         -- now asimpl.
         -- now rewrite rinstInst'_exp, ttrans_E_subst_exp.
   - destruct IHHOL_prv as [e He]. exists e. eapply HOPL_MM; eauto. cbn. eapply HOPL_CONV.
