@@ -647,7 +647,7 @@ Fixpoint trans_S (phi : form) (e : prog) : spec :=
                                           (ren_spec id swap id (trans_S psi (var_prog 0)))))
   | all s phi => tyall s (spall (trans_I s (var_type 0))
                              (after (tyapp (ren_prog ↑ id e) (var_type 0))
-                                    (trans_S phi (var_prog 0))))
+                                    (ren_spec id swap id (trans_S phi (var_prog 0)))))
   | holds p p' => spholds (exapp (ttrans_E p) (ttrans_T p')) (ttrans_E p') e
   end
 with ttrans_E (p : term) : exp :=
@@ -655,8 +655,6 @@ with ttrans_E (p : term) : exp :=
   | var_term x => var_exp x
   | cterm s phi => exabs s (cexp (trans_T phi) (trans_I s (var_type 0)) (trans_S phi (var_prog 0)))
   end.
-
-Compute (trans_S (implies (holds (var_term 0) (var_term 1)) (holds (var_term 0) (var_term 1))) (var_prog 0)).
 
 Fixpoint trans_IL' (SL : list sort) n : list index :=
   match SL with
@@ -739,7 +737,7 @@ Proof.
     + rewrite <- IHphi1. apply extRen_spec; now intros [].
     + f_equal. rewrite <- IHphi2. now asimpl.
   - f_equal. f_equal; try apply trans_I_ren. asimpl. unfold funcomp. f_equal.
-    rewrite <- IHphi. apply extRen_spec; trivial. now intros [].
+    rewrite <- IHphi. asimpl. apply extRen_spec; trivial. now intros [].
   - now rewrite !ttrans_E_ren, ttrans_T_ren.
   - induction t in sigma |- *; cbn; trivial. f_equal. f_equal.
     + now rewrite trans_T_ren.
@@ -772,8 +770,8 @@ Proof.
   - f_equal. f_equal. 2: f_equal.
     + rewrite idSubst_index; trivial. now intros [].
     + now asimpl.
-    + erewrite ext_spec with (tau_prog := up_prog_prog (up_exp_prog (up_type_prog sigma))).
-      now rewrite IHphi. 2: reflexivity. all: now intros [].
+    + asimpl. unfold funcomp. erewrite ext_spec. 3: reflexivity.
+      rewrite rinstInst'_spec. now rewrite !IHphi. all: now intros [].
   - rewrite instId'_type. f_equal; now rewrite ttrans_E_subst_exp.
   - induction t in sigma |- *; cbn; trivial. f_equal. f_equal.
     + rewrite idSubst_type; trivial. now intros [].
@@ -880,7 +878,7 @@ Proof.
         -- apply ht_var. reflexivity.
   - cbn. apply is_tyall, is_spall; try now apply trans_is_index, hk_var.
     unfold trans_IL. rewrite trans_IL_up. apply is_after with (trans_T phi).
-    + apply IHphi; trivial. now apply ht_var.
+    + rewrite rinstInst'_spec, trans_S_subst_spec. apply IHphi; trivial. now apply ht_var.
     + replace (comp (trans_T phi)) with ((comp (ren_type swap (trans_T phi)))[(0 __type)..]).
       * apply ht_tyapp with n; try now apply hk_var. cbn in HT.
         change (pi n (comp (ren_type swap (trans_T phi)))) with ((pi n (comp (trans_T phi))) ⟨↑⟩).
@@ -1096,9 +1094,10 @@ Proof.
     + cbn. f_equal.
       * now asimpl.
       * rewrite substSubst_spec, <- trans_S_subst.
-        rewrite substRen_spec. apply ext_spec; intros []; cbn; trivial.
+        rewrite !substRen_spec, renSubst_spec.
+        apply ext_spec; intros []; cbn; trivial.
         -- now asimpl.
-        -- now rewrite rinstInst'_exp, ttrans_E_subst_exp.
+        -- now rewrite !rinstInst'_exp, !ttrans_E_subst_exp.
   - destruct IHHOL_prv as [e He]. exists e. eapply HOPL_MM; eauto. cbn. eapply HOPL_CONV.
     + apply cs_sym, cs_holds_exp1, ce_beta. reflexivity.
     + cbn. apply HOPL_CI. asimpl. apply HOPL_CTX. left.
@@ -1113,7 +1112,9 @@ Proof.
         change (var_prog 0) with (subst_prog var_type (var_prog 0 .: var_prog) (var_prog 0)) at 3.
         rewrite <- trans_S_subst_spec, <- trans_S_subst. asimpl. unfold funcomp.
         apply ext_spec; trivial. intros []; trivial. now rewrite ttrans_E_subst_exp.
-Admitted.
+Qed.
+
+Print Assumptions soundness'.
 
 Theorem soundness Xi Psi psi :
   (forall psi', In psi' (psi :: Psi) -> is_prop Xi psi') -> HOL_prv Psi psi
