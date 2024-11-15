@@ -717,16 +717,6 @@ Proof.
     rewrite <- trans_T_subst. f_equal. apply ext_type. intros []; cbn; trivial. apply ttrans_T_ren.
 Qed.
 
-(*Lemma trans_S_subst' phi e sigma xi :
-  subst_spec (sigma >> ttrans_T) xi (sigma >> ttrans_E) (trans_S phi e)
-  = trans_S (subst_form sigma phi) (subst_prog (sigma >> ttrans_T) xi e).
-Proof.
-  induction phi in e, sigma, xi |- *; cbn.
-  - f_equal; try apply trans_T_subst. f_equal. 2: f_equal.
-    + change (var_prog 0) with (subst_prog (sigma >> ttrans_T) (up_prog_prog xi) (var_prog 0)) at 2.
-      rewrite <- IHphi1. apply ext_spec; try now intros [].
-Admitted.*)
-
 Lemma trans_S_ren phi x sigma :
   ren_spec sigma id sigma (trans_S phi (var_prog x)) = trans_S (ren_form sigma phi) (var_prog x)
 with ttrans_E_ren t sigma :
@@ -745,17 +735,54 @@ Proof.
     + asimpl. unfold funcomp. rewrite <- trans_S_ren. apply extRen_spec; trivial. now intros [].
 Qed.
 
+Lemma trans_S_ren_spec phi x sigma rho :
+  ren_spec rho sigma rho (trans_S phi (var_prog x)) = trans_S (ren_form rho phi) (var_prog (sigma x))
+with ttrans_E_ren_exp t sigma rho :
+  ren_exp rho sigma rho (ttrans_E t) = ttrans_E (ren_term rho t).
+Proof.
+  induction phi in x, sigma, rho |- *; cbn.
+  - rewrite trans_T_ren. f_equal. f_equal.
+    + rewrite IHphi1. reflexivity.
+    + f_equal. change (var_prog 0) with ((var_prog (swap 0))) at 2.
+      rewrite <- IHphi2. asimpl. unfold funcomp. now rewrite !IHphi2.
+  - f_equal. f_equal; try apply trans_I_ren. asimpl. unfold funcomp. f_equal.
+    change (var_prog 0) with ((var_prog (swap 0))) at 2.
+    rewrite <- IHphi. asimpl. unfold funcomp. now rewrite !IHphi.
+  - now rewrite !ttrans_E_ren_exp, ttrans_T_ren.
+  - induction t in sigma |- *; cbn; trivial. f_equal. f_equal.
+    + now rewrite trans_T_ren.
+    + now rewrite trans_I_ren.
+    + asimpl. unfold funcomp. now rewrite trans_S_ren_spec.
+Qed.
+
 Lemma trans_S_subst phi x sigma :
   subst_spec (sigma >> ttrans_T) var_prog (sigma >> ttrans_E) (trans_S phi (var_prog x))
-  = trans_S (subst_form sigma phi) (var_prog x).
+  = trans_S (subst_form sigma phi) (var_prog x)
+with ttrans_E_subst t sigma :
+  subst_exp (sigma >> ttrans_T) var_prog (sigma >> ttrans_E) (ttrans_E t)
+  = ttrans_E (subst_term sigma t).
 Proof.
   induction phi in x, sigma |- *; cbn.
-  - admit.
+  - f_equal. 2: f_equal. 3: f_equal.
+    + now rewrite trans_T_subst.
+    + rewrite <- IHphi1. asimpl. unfold funcomp. apply ext_spec; try now intros [].
+      intros n. rewrite ttrans_E_ren_exp. now asimpl.
+    + rewrite <- IHphi2. asimpl. unfold funcomp. apply ext_spec; try now intros [].
+      intros n. rewrite !ttrans_E_ren_exp. now asimpl.
   - f_equal. f_equal; try apply trans_I_subst. asimpl. unfold funcomp. f_equal.
-    rewrite <- IHphi. apply ext_spec; intros []; cbn; trivial.
-    + apply ttrans_T_ren.
-    + admit.
-Admitted.
+    rewrite <- IHphi. rewrite substRen_spec. apply ext_spec; intros []; cbn; trivial.
+    + asimpl. apply ttrans_T_ren.
+    + asimpl. unfold funcomp. rewrite !ttrans_E_ren_exp. now asimpl.
+  - now rewrite !ttrans_E_subst, ttrans_T_subst.
+  - induction t in sigma |- *; cbn; trivial. f_equal. f_equal.
+    + rewrite <- trans_T_subst. asimpl. unfold funcomp. cbn. apply ext_type.
+      intros []; cbn; trivial. now rewrite ttrans_T_ren.
+    + now rewrite trans_I_subst.
+    + asimpl. unfold funcomp. rewrite <- trans_S_subst. apply ext_spec.
+      * intros []; cbn; trivial. now rewrite ttrans_T_ren.
+      * now intros [].
+      * intros []; cbn; trivial. rewrite <- ttrans_E_ren. now rewrite !ttrans_E_ren_exp.
+Qed.
 
 Lemma trans_S_subst_spec phi e sigma :
   subst_spec var_type sigma var_exp (trans_S phi e) = trans_S phi (subst_prog var_type sigma e)
@@ -921,18 +948,6 @@ Lemma trans_SL_up Psi n :
 Proof.
   induction Psi in n |- *; cbn; trivial.
   rewrite IHPsi. now rewrite rinstInst'_spec, trans_S_subst_spec.
-Qed.
-
-Lemma test t t' e e' Delta Gamma :
-  has_type Delta Gamma e (comp (arrow t t')) -> has_type Delta Gamma e' (comp t)
-  -> has_type Delta Gamma (bind e (bind (ren_prog id ↑ e') (tmapp (var_prog 1) (var_prog 0)))) (comp t').
-Proof.
-  intros H1 H2.
-  apply ht_bind with (arrow t t'); trivial.
-  apply ht_bind with t.
-  - rewrite <- rinstId'_type. eapply has_type_ren; try apply H2; trivial.
-    intros. now rewrite rinstId'_type.
-  - apply ht_tmapp with t; now apply ht_var.
 Qed.
 
 Lemma is_value_ren e sig1 sig2 :
@@ -1104,14 +1119,13 @@ Proof.
       change (var_prog 0) with (subst_prog var_type (var_prog 0 .: var_prog) (var_prog 0)).
       rewrite <- trans_S_subst_spec, <- trans_S_subst. asimpl. unfold funcomp.
       apply ext_spec; trivial. intros []; trivial. now rewrite ttrans_E_subst_exp.
-  - destruct IHHOL_prv as [e He]. exists e. eapply HOPL_MM; eauto. cbn. eapply HOPL_IE.
-    + eapply HOPL_CONV; try (apply HOPL_CTX; now left). now apply cs_holds_exp1, ce_beta.
-    + cbn. apply HOPL_II. eapply HOPL_IE.
-      * eapply HOPL_CE. apply HOPL_CTX. now left.
-      * apply HOPL_II, HOPL_CTX. left. asimpl. unfold funcomp.
-        change (var_prog 0) with (subst_prog var_type (var_prog 0 .: var_prog) (var_prog 0)) at 3.
-        rewrite <- trans_S_subst_spec, <- trans_S_subst. asimpl. unfold funcomp.
-        apply ext_spec; trivial. intros []; trivial. now rewrite ttrans_E_subst_exp.
+  - destruct IHHOL_prv as [e He]. exists e. eapply HOPL_MM; eauto. cbn.
+    eapply HOPL_eq. 2: reflexivity. eapply HOPL_CE. eapply HOPL_CONV.
+    eapply cs_holds_exp1. eapply ce_beta. 2: apply HOPL_CTX; now left.
+    cbn. reflexivity. asimpl. unfold funcomp.
+    change (var_prog 0) with (subst_prog var_type (var_prog 0 .: var_prog) (var_prog 0)) at 3.
+    rewrite <- trans_S_subst_spec, <- trans_S_subst. asimpl. unfold funcomp.
+    apply ext_spec; trivial. intros []; trivial. now rewrite ttrans_E_subst_exp.
 Qed.
 
 Print Assumptions soundness'.
