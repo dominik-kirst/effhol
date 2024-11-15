@@ -87,6 +87,104 @@ with conv_spec : spec -> spec -> Prop :=
 
 
 
+(** Reduction and conversion renaming lemmas **)
+
+Lemma is_value_ren e sig1 sig2 :
+  is_value e -> is_value e⟨sig1;sig2⟩.
+Proof.
+  induction 1; cbn in *; econstructor; eauto.
+Qed.
+
+Lemma red_prog_ren e1 e2 sig1 sig2 :
+  red_prog e1 e2 -> red_prog e1⟨sig1;sig2⟩ e2⟨sig1;sig2⟩.
+Proof.
+  induction 1; cbn in *.
+  - econstructor 1; eauto.
+  - econstructor 2. rewrite H. now asimpl.
+  - econstructor 3.
+    + rewrite H. now asimpl.
+    + now apply is_value_ren.
+  - econstructor 4. rewrite H. now asimpl.
+  - econstructor 5; eauto.
+  - econstructor 6; eauto.
+  - econstructor 7; eauto. now apply is_value_ren.
+  - econstructor 8; eauto.
+Qed.
+
+Lemma conv_type_ren t1 t2 xi :
+  conv_type t1 t2 -> conv_type t1⟨xi⟩ t2⟨xi⟩.
+Proof.
+  induction 1 in xi |-*; cbn.
+  - apply ct_refl.
+  - now apply ct_sym.
+  - eapply ct_trans; eauto.
+  - apply ct_beta. rewrite H. now asimpl.
+  - now apply ct_app1.
+  - now apply ct_app2.
+  - now apply ct_arrow1.
+  - now apply ct_arrow2.
+  - now apply ct_pi.
+  - now apply ct_comp.
+Qed.
+
+Lemma conv_prog_ren e1 e2 sig1 sig2 :
+  conv_prog e1 e2 -> conv_prog e1⟨sig1;sig2⟩ e2⟨sig1;sig2⟩.
+Proof.
+  induction 1.
+  - econstructor 1; eauto.
+  - econstructor 2; eauto.
+  - econstructor 3; eauto.
+  - econstructor 4; eauto. now apply conv_type_ren.
+Qed.
+
+Lemma conv_index_ren o1 o2 xi :
+  conv_index o1 o2 -> conv_index o1⟨xi⟩ o2⟨xi⟩.
+Proof.
+  induction 1 in xi |-*; cbn.
+  - apply ci_refl.
+  - now apply ci_sym.
+  - eapply ci_trans; eauto.
+  - apply ci_refb. now apply conv_type_ren.
+  - apply ci_ref_type. now apply conv_type_ren.
+  - now apply ci_ref_index.
+  - now apply ci_univ.
+Qed.
+
+Lemma conv_spec_ren phi psi sig1 sig2 sig3 :
+  conv_spec phi psi -> conv_spec phi⟨sig1;sig2;sig3⟩ psi⟨sig1;sig2;sig3⟩
+with conv_exp_ren q q' sig1 sig2 sig3 :
+  conv_exp q q' -> conv_exp q⟨sig1;sig2;sig3⟩ q'⟨sig1;sig2;sig3⟩.
+Proof.
+  induction 1 in sig1, sig2, sig3 |- *; cbn in *.
+  - econstructor 1; eauto.
+  - econstructor 2; eauto.
+  - econstructor 3; eauto.
+  - econstructor 4; eauto.
+  - econstructor 5; eauto.
+  - econstructor 6; eauto. now apply conv_prog_ren.
+  - econstructor 7; eauto.
+  - econstructor 8; eauto.
+  - econstructor 9; eauto. now apply conv_type_ren.
+  - econstructor 10; eauto.
+  - econstructor 11; eauto. now apply conv_index_ren.
+  - econstructor 12; eauto.
+  - econstructor 13; eauto. now apply conv_prog_ren.
+  - fold ren_exp. econstructor 14; eauto.
+  - fold ren_exp. econstructor 15; eauto.
+  - induction 1 in sig1, sig2, sig3 |- *; cbn in *.
+    + econstructor 1; eauto.
+    + econstructor 2; eauto.
+    + econstructor 3; eauto.
+    + econstructor 4; eauto. rewrite H. now asimpl.
+    + econstructor 5; eauto.
+    + econstructor 6; eauto. now apply conv_type_ren.
+    + fold ren_exp. econstructor 7; eauto. now apply conv_type_ren.
+    + fold ren_spec. econstructor 8; eauto. now apply conv_index_ren.
+    + fold ren_spec. econstructor 9; eauto.
+Qed.
+
+
+
 (** Typing judgements **)
 
 Definition sort := nat.
@@ -179,6 +277,145 @@ with is_spec (Delta : list kind) (Gamma : list type) (Sigma : list index) : spec
 
 
 
+(** Judgement renaming lemmas **)
+
+Lemma has_kind_ren Delta Delta' t k xi :
+  has_kind Delta t k
+  -> (forall x k', lup Delta x = Some k' -> lup Delta' (xi x) = Some k')
+  -> has_kind Delta' t⟨xi⟩ k.
+Proof.
+  induction 1 in Delta', xi |- *; cbn; intros HD.
+  - apply hk_var. now apply HD.
+  - apply hk_app with k; intuition.
+  - apply hk_abs. apply IHhas_kind. intros []; firstorder.
+  - apply hk_arrow; intuition.
+  - apply hk_pi. apply IHhas_kind. intros []; firstorder.
+  - apply hk_comp. now apply IHhas_kind.
+Qed.
+
+Lemma has_type_ren Delta Delta' Gamma Gamma' xi rho e t :
+  has_type Delta Gamma e t
+  -> (forall n k, lup Delta n = Some k -> lup Delta' (xi n) = Some k)
+  -> (forall n t', lup Gamma n = Some t' -> lup Gamma' (rho n) = Some (ren_type xi t'))
+  -> has_type Delta' Gamma' (ren_prog xi rho e) (ren_type xi t).
+Proof.
+  induction 1 in xi, rho, Delta', Gamma' |- *; intros HD HG; cbn.
+  - apply ht_var. now apply HG.
+  - apply ht_tyabs. apply IHhas_type.
+    + intros []; cbn; intuition.
+    + intros n0 t' H0. rewrite nth_error_map in H0.
+      destruct (lup Gamma n0) eqn: He; cbn in *; try discriminate.
+      injection H0 as []. erewrite renRen_type, extRen_type, <- renRen_type.
+      * apply map_nth_error. now apply HG.
+      * now intros [].
+  - apply ht_tmabs. apply IHhas_type.
+    + intros []; cbn; intuition.
+    + intros []; cbn; intros; try now injection H0 as ->. now apply HG.
+  - apply ht_ret. apply IHhas_type; eauto.
+  - apply ht_bind with t1⟨xi⟩.
+    + apply IHhas_type1; eauto.
+    + apply IHhas_type2; eauto. intros []; cbn; intuition.
+      unfold upRen_prog_type. now injection H1 as ->.
+  - cbn. asimpl. erewrite ext_type, <- renSubst_type at 1.
+    + apply ht_tyapp with k.
+      * apply IHhas_type; eauto.
+      * eapply has_kind_ren; try apply H0. apply HD.
+    + now intros [].
+  - apply ht_tmapp with t1⟨xi⟩.
+    + apply IHhas_type1; eauto.
+    + apply IHhas_type2; eauto.
+  - apply ht_conv with t1⟨xi⟩.
+    + now apply conv_type_ren.
+    + apply IHhas_type; eauto.
+Qed.
+
+Lemma is_index_ren Delta Delta' xi o :
+  is_index Delta o
+  -> (forall n k, lup Delta n = Some k -> lup Delta' (xi n) = Some k)
+  -> is_index Delta' o⟨xi⟩.
+Proof.
+  induction 1 in Delta', xi |- *; intros HD; cbn.
+  - apply ii_refb. now apply (has_kind_ren H).
+  - apply ii_ref; try now apply (has_kind_ren H). now apply IHis_index; try apply H3.
+  - apply ii_univ. apply IHis_index; try apply H1. intros []; cbn in *; intuition.
+Qed.
+
+Lemma is_spec_ren Delta Delta' Gamma Gamma' Sigma Sigma' tren pren eren phi :
+  is_spec Delta Gamma Sigma phi
+  -> (forall n k, lup Delta n = Some k -> lup Delta' (tren n) = Some k)
+  -> (forall n t, lup Gamma n = Some t -> lup Gamma' (pren n) = Some (ren_type tren t))
+  -> (forall n o, lup Sigma n = Some o -> lup Sigma' (eren n) = Some (ren_index tren o))
+  -> is_spec Delta' Gamma' Sigma' (ren_spec tren pren eren phi)
+with has_index_ren Delta Delta' Gamma Gamma' Sigma Sigma' tren pren eren q o :
+  has_index Delta Gamma Sigma q o
+  -> (forall n k, lup Delta n = Some k -> lup Delta' (tren n) = Some k)
+  -> (forall n t, lup Gamma n = Some t -> lup Gamma' (pren n) = Some (ren_type tren t))
+  -> (forall n o, lup Sigma n = Some o -> lup Sigma' (eren n) = Some (ren_index tren o))
+  -> has_index Delta' Gamma' Sigma' (ren_exp tren pren eren q) o⟨tren⟩.
+Proof.
+  induction 1 in Delta', Gamma', Sigma', tren, pren, eren |- *; intros HD HG HS; cbn.
+  - apply is_implies; eauto.
+  - apply is_after with t⟨tren⟩.
+    + apply IHis_spec; eauto. destruct n; cbn in *; intuition. now injection H1 as ->.
+    + eapply has_type_ren in H0; eauto.
+  - apply is_tyall. apply IHis_spec; eauto.
+    + intros [] k'; cbn; intuition.
+    + intros n0 t' H0. rewrite nth_error_map in H0.
+      destruct (lup Gamma n0) eqn: He; cbn in *; try discriminate.
+      injection H0 as []. erewrite renRen_type, extRen_type, <- renRen_type.
+      * apply map_nth_error. now apply HG.
+      * now intros [].
+    + intros n0 t' H0. rewrite nth_error_map in H0.
+      destruct (lup Sigma n0) eqn: He; cbn in *; try discriminate.
+      injection H0 as []. erewrite renRen_index, extRen_index, <- renRen_index.
+      * apply map_nth_error. now apply HS.
+      * now intros [].
+  - apply is_tmall. apply IHis_spec; eauto.
+    intros [] t0; cbn; try apply HG.
+    intros [=]; subst. reflexivity.
+  - apply is_spall; try eapply is_index_ren; eauto. apply IHis_spec; try apply H2; intuition.
+    destruct n; cbn in *; intuition. now injection H1 as ->.
+  - eapply is_holds.
+    + eapply has_type_ren; try apply H; intuition.
+    + eapply has_index_ren in H0; eauto.
+    + fold ren_index. eapply has_index_ren in H1; eauto.
+  - induction 1 in Delta', Gamma', Sigma', tren, pren, eren |- *; intros HD HG HS; cbn.
+    + apply hi_var. now apply HS.
+    + apply hi_cexp. eapply is_spec_ren; try apply H; intuition.
+      * destruct n; cbn in *; intuition. now injection H0 as ->.
+      * destruct n; cbn in *; intuition. now injection H0 as ->.
+    + apply hi_exabs. apply IHhas_index; intuition.
+      * destruct n; cbn in *; intuition.
+      * rewrite nth_error_map in H0.
+        destruct (lup Gamma n) eqn: He; cbn in *; try discriminate.
+        injection H0 as []. erewrite renRen_type, extRen_type, <- renRen_type.
+        -- apply map_nth_error. now apply HG.
+        -- now intros [].
+      * rewrite nth_error_map in H0.
+        destruct (lup Sigma n) eqn: He; cbn in *; try discriminate.
+        injection H0 as []. erewrite renRen_index, extRen_index, <- renRen_index.
+        -- apply map_nth_error. now apply HS.
+        -- now intros [].
+    + erewrite compSubstRen_index, ext_index, <- compRenSubst_index. eapply hi_exapp.
+      apply IHhas_index; try apply H; intuition. 2,3: reflexivity.
+      * eapply has_kind_ren; eauto.
+      * now intros [].
+    + apply hi_conv with o1⟨tren⟩.
+      * now apply conv_index_ren.
+      * apply IHhas_index; eauto. 
+Qed.
+
+Lemma is_spec_ren' Delta Gamma Gamma' Sigma xi phi :
+  is_spec Delta Gamma Sigma phi
+  -> (forall n t, lup Gamma n = Some t -> lup Gamma' (xi n) = Some t)
+  -> is_spec Delta Gamma' Sigma (ren_spec id xi id phi).
+Proof.
+  intros H1 H2. eapply is_spec_ren; try apply H1; intuition.
+  - rewrite rinstId'_type. intuition.
+  - rewrite rinstId'_index. intuition.
+Qed.
+
+
 (** HOL deduction system **)
 
 Inductive HOL_prv (A : list form) : form -> Prop :=
@@ -254,6 +491,53 @@ Lemma HOPL_eq A phi B psi :
   HOPL_prv A phi -> A = B -> phi = psi -> HOPL_prv B psi.
 Proof.
   intros H -> ->. apply H.
+Qed.
+
+Lemma HOPL_ren sig1 sig2 sig3 A phi :
+  HOPL_prv A phi -> HOPL_prv (map (ren_spec sig1 sig2 sig3) A) (ren_spec sig1 sig2 sig3 phi).
+Proof.
+  induction 1 in sig1, sig2, sig3 |- * ; cbn in *.
+  - constructor. now apply in_map.
+  - econstructor 2. eauto.
+  - econstructor 3; eauto.
+  - econstructor 4. eapply HOPL_eq. 3: reflexivity.
+    + apply IHHOPL_prv.
+    + rewrite !map_map. apply map_ext. intros psi. now asimpl.
+  - eapply HOPL_eq. 2: reflexivity.
+    + econstructor 5 with (t := t⟨sig1⟩). apply IHHOPL_prv.
+    + cbn. now asimpl.
+  - econstructor 6. eapply HOPL_eq. 3: reflexivity.
+    + apply IHHOPL_prv.
+    + rewrite !map_map. apply map_ext. intros psi. now asimpl.
+  - eapply HOPL_eq. 2: reflexivity.
+    + econstructor 7 with (e := ren_prog sig1 sig2 e). apply IHHOPL_prv.
+    + cbn. now asimpl.
+  - econstructor 8. eapply HOPL_eq. 3: reflexivity.
+    + apply IHHOPL_prv.
+    + rewrite !map_map. apply map_ext. intros psi. now asimpl.
+  - eapply HOPL_eq. 2: reflexivity.
+    + econstructor 9 with (q := ren_exp sig1 sig2 sig3 q). apply IHHOPL_prv.
+    + cbn. now asimpl.
+  - econstructor 10. eapply HOPL_eq. 2: reflexivity.
+    + apply IHHOPL_prv.
+    + now asimpl.
+  - eapply HOPL_eq. 2: reflexivity.
+    + econstructor 11. apply IHHOPL_prv.
+    + now asimpl.
+  - constructor 12. eapply HOPL_eq. 2: reflexivity.
+    + apply IHHOPL_prv.
+    + now asimpl.
+  - constructor 13. eapply HOPL_eq. 2: reflexivity.
+    + apply IHHOPL_prv.
+    + cbn. now asimpl.
+  - econstructor 14. 2: apply IHHOPL_prv2. eapply HOPL_eq; try apply IHHOPL_prv1.
+    2: reflexivity. f_equal. rewrite !map_map. apply map_ext. intros phi1. now asimpl.
+  - eapply HOPL_eq with (phi := subst_spec var_type ((ren_prog sig1 sig2 e1)..) var_exp (ren_spec sig1 (upRen_prog_prog sig2) sig3 phi)).
+    2: reflexivity. econstructor 15 with (e2 := ren_prog sig1 sig2 e2).
+    + now apply red_prog_ren.
+    + eapply HOPL_eq. 2: reflexivity. apply IHHOPL_prv. now asimpl.
+    + now asimpl.
+  - econstructor 16; try apply IHHOPL_prv. now apply conv_spec_ren.
 Qed.
 
 
@@ -439,186 +723,6 @@ Qed.
 
 
 
-(** Judgement weakening lemmas **)
-
-Lemma has_kind_weak Delta Delta' t k :
-  has_kind Delta t k -> has_kind (Delta ++ Delta') t k.
-Proof.
-  induction 1; econstructor; intuition; eauto.
-  rewrite nth_error_app1; trivial. apply nth_error_Some. congruence.
-Qed.
-
-
-
-(** Judgement renaming lemmas **)
-
-Lemma has_kind_ren Delta Delta' t k xi :
-  has_kind Delta t k
-  -> (forall x k', lup Delta x = Some k' -> lup Delta' (xi x) = Some k')
-  -> has_kind Delta' t⟨xi⟩ k.
-Proof.
-  induction 1 in Delta', xi |- *; cbn; intros HD.
-  - apply hk_var. now apply HD.
-  - apply hk_app with k; intuition.
-  - apply hk_abs. apply IHhas_kind. intros []; firstorder.
-  - apply hk_arrow; intuition.
-  - apply hk_pi. apply IHhas_kind. intros []; firstorder.
-  - apply hk_comp. now apply IHhas_kind.
-Qed.
-
-Lemma conv_type_ren t1 t2 xi :
-  conv_type t1 t2 -> conv_type t1⟨xi⟩ t2⟨xi⟩.
-Proof.
-  induction 1 in xi |-*; cbn.
-  - apply ct_refl.
-  - now apply ct_sym.
-  - eapply ct_trans; eauto.
-  - apply ct_beta. rewrite H. now asimpl.
-  - now apply ct_app1.
-  - now apply ct_app2.
-  - now apply ct_arrow1.
-  - now apply ct_arrow2.
-  - now apply ct_pi.
-  - now apply ct_comp.
-Qed.
-
-Lemma has_type_ren Delta Delta' Gamma Gamma' xi rho e t :
-  has_type Delta Gamma e t
-  -> (forall n k, lup Delta n = Some k -> lup Delta' (xi n) = Some k)
-  -> (forall n t', lup Gamma n = Some t' -> lup Gamma' (rho n) = Some (ren_type xi t'))
-  -> has_type Delta' Gamma' (ren_prog xi rho e) (ren_type xi t).
-Proof.
-  induction 1 in xi, rho, Delta', Gamma' |- *; intros HD HG; cbn.
-  - apply ht_var. now apply HG.
-  - apply ht_tyabs. apply IHhas_type.
-    + intros []; cbn; intuition.
-    + intros n0 t' H0. rewrite nth_error_map in H0.
-      destruct (lup Gamma n0) eqn: He; cbn in *; try discriminate.
-      injection H0 as []. erewrite renRen_type, extRen_type, <- renRen_type.
-      * apply map_nth_error. now apply HG.
-      * now intros [].
-  - apply ht_tmabs. apply IHhas_type.
-    + intros []; cbn; intuition.
-    + intros []; cbn; intros; try now injection H0 as ->. now apply HG.
-  - apply ht_ret. apply IHhas_type; eauto.
-  - apply ht_bind with t1⟨xi⟩.
-    + apply IHhas_type1; eauto.
-    + apply IHhas_type2; eauto. intros []; cbn; intuition.
-      unfold upRen_prog_type. now injection H1 as ->.
-  - cbn. asimpl. erewrite ext_type, <- renSubst_type at 1.
-    + apply ht_tyapp with k.
-      * apply IHhas_type; eauto.
-      * eapply has_kind_ren; try apply H0. apply HD.
-    + now intros [].
-  - apply ht_tmapp with t1⟨xi⟩.
-    + apply IHhas_type1; eauto.
-    + apply IHhas_type2; eauto.
-  - apply ht_conv with t1⟨xi⟩.
-    + now apply conv_type_ren.
-    + apply IHhas_type; eauto.
-Qed.
-
-Lemma is_index_ren Delta Delta' xi o :
-  is_index Delta o
-  -> (forall n k, lup Delta n = Some k -> lup Delta' (xi n) = Some k)
-  -> is_index Delta' o⟨xi⟩.
-Proof.
-  induction 1 in Delta', xi |- *; intros HD; cbn.
-  - apply ii_refb. now apply (has_kind_ren H).
-  - apply ii_ref; try now apply (has_kind_ren H). now apply IHis_index; try apply H3.
-  - apply ii_univ. apply IHis_index; try apply H1. intros []; cbn in *; intuition.
-Qed.
-
-Lemma conv_index_ren o1 o2 xi :
-  conv_index o1 o2 -> conv_index o1⟨xi⟩ o2⟨xi⟩.
-Proof.
-  induction 1 in xi |-*; cbn.
-  - apply ci_refl.
-  - now apply ci_sym.
-  - eapply ci_trans; eauto.
-  - apply ci_refb. now apply conv_type_ren.
-  - apply ci_ref_type. now apply conv_type_ren.
-  - now apply ci_ref_index.
-  - now apply ci_univ.
-Qed.
-
-Lemma is_spec_ren Delta Delta' Gamma Gamma' Sigma Sigma' tren pren eren phi :
-  is_spec Delta Gamma Sigma phi
-  -> (forall n k, lup Delta n = Some k -> lup Delta' (tren n) = Some k)
-  -> (forall n t, lup Gamma n = Some t -> lup Gamma' (pren n) = Some (ren_type tren t))
-  -> (forall n o, lup Sigma n = Some o -> lup Sigma' (eren n) = Some (ren_index tren o))
-  -> is_spec Delta' Gamma' Sigma' (ren_spec tren pren eren phi)
-with has_index_ren Delta Delta' Gamma Gamma' Sigma Sigma' tren pren eren q o :
-  has_index Delta Gamma Sigma q o
-  -> (forall n k, lup Delta n = Some k -> lup Delta' (tren n) = Some k)
-  -> (forall n t, lup Gamma n = Some t -> lup Gamma' (pren n) = Some (ren_type tren t))
-  -> (forall n o, lup Sigma n = Some o -> lup Sigma' (eren n) = Some (ren_index tren o))
-  -> has_index Delta' Gamma' Sigma' (ren_exp tren pren eren q) o⟨tren⟩.
-Proof.
-  induction 1 in Delta', Gamma', Sigma', tren, pren, eren |- *; intros HD HG HS; cbn.
-  - apply is_implies; eauto.
-  - apply is_after with t⟨tren⟩.
-    + apply IHis_spec; eauto. destruct n; cbn in *; intuition. now injection H1 as ->.
-    + eapply has_type_ren in H0; eauto.
-  - apply is_tyall. apply IHis_spec; eauto.
-    + intros [] k'; cbn; intuition.
-    + intros n0 t' H0. rewrite nth_error_map in H0.
-      destruct (lup Gamma n0) eqn: He; cbn in *; try discriminate.
-      injection H0 as []. erewrite renRen_type, extRen_type, <- renRen_type.
-      * apply map_nth_error. now apply HG.
-      * now intros [].
-    + intros n0 t' H0. rewrite nth_error_map in H0.
-      destruct (lup Sigma n0) eqn: He; cbn in *; try discriminate.
-      injection H0 as []. erewrite renRen_index, extRen_index, <- renRen_index.
-      * apply map_nth_error. now apply HS.
-      * now intros [].
-  - apply is_tmall. apply IHis_spec; eauto.
-    intros [] t0; cbn; try apply HG.
-    intros [=]; subst. reflexivity.
-  - apply is_spall; try eapply is_index_ren; eauto. apply IHis_spec; try apply H2; intuition.
-    destruct n; cbn in *; intuition. now injection H1 as ->.
-  - eapply is_holds.
-    + eapply has_type_ren; try apply H; intuition.
-    + eapply has_index_ren in H0; eauto.
-    + fold ren_index. eapply has_index_ren in H1; eauto.
-  - induction 1 in Delta', Gamma', Sigma', tren, pren, eren |- *; intros HD HG HS; cbn.
-    + apply hi_var. now apply HS.
-    + apply hi_cexp. eapply is_spec_ren; try apply H; intuition.
-      * destruct n; cbn in *; intuition. now injection H0 as ->.
-      * destruct n; cbn in *; intuition. now injection H0 as ->.
-    + apply hi_exabs. apply IHhas_index; intuition.
-      * destruct n; cbn in *; intuition.
-      * rewrite nth_error_map in H0.
-        destruct (lup Gamma n) eqn: He; cbn in *; try discriminate.
-        injection H0 as []. erewrite renRen_type, extRen_type, <- renRen_type.
-        -- apply map_nth_error. now apply HG.
-        -- now intros [].
-      * rewrite nth_error_map in H0.
-        destruct (lup Sigma n) eqn: He; cbn in *; try discriminate.
-        injection H0 as []. erewrite renRen_index, extRen_index, <- renRen_index.
-        -- apply map_nth_error. now apply HS.
-        -- now intros [].
-    + erewrite compSubstRen_index, ext_index, <- compRenSubst_index. eapply hi_exapp.
-      apply IHhas_index; try apply H; intuition. 2,3: reflexivity.
-      * eapply has_kind_ren; eauto.
-      * now intros [].
-    + apply hi_conv with o1⟨tren⟩.
-      * now apply conv_index_ren.
-      * apply IHhas_index; eauto. 
-Qed.
-
-Lemma is_spec_ren' Delta Gamma Gamma' Sigma xi phi :
-  is_spec Delta Gamma Sigma phi
-  -> (forall n t, lup Gamma n = Some t -> lup Gamma' (xi n) = Some t)
-  -> is_spec Delta Gamma' Sigma (ren_spec id xi id phi).
-Proof.
-  intros H1 H2. eapply is_spec_ren; try apply H1; intuition.
-  - rewrite rinstId'_type. intuition.
-  - rewrite rinstId'_index. intuition.
-Qed.
-
-
-
 (** Translation from HOL to HOPL **)
 
 Fixpoint trans_I (s : sort) (t : type) : index :=
@@ -717,94 +821,85 @@ Proof.
     rewrite <- trans_T_subst. f_equal. apply ext_type. intros []; cbn; trivial. apply ttrans_T_ren.
 Qed.
 
-Lemma trans_S_ren phi x sigma :
-  ren_spec sigma id sigma (trans_S phi (var_prog x)) = trans_S (ren_form sigma phi) (var_prog x)
-with ttrans_E_ren t sigma :
-  ren_exp sigma id sigma (ttrans_E t) = ttrans_E (ren_term sigma t).
+Lemma trans_S_ren phi e sigma rho :
+  ren_spec rho sigma rho (trans_S phi e) = trans_S (ren_form rho phi) (ren_prog rho sigma e)
+with ttrans_E_ren t sigma rho :
+  ren_exp rho sigma rho (ttrans_E t) = ttrans_E (ren_term rho t).
 Proof.
-  induction phi in x, sigma |- *; cbn.
+  induction phi in e, sigma, rho |- *; cbn.
   - rewrite trans_T_ren. f_equal. f_equal.
-    + rewrite <- IHphi1. apply extRen_spec; now intros [].
-    + f_equal. rewrite <- IHphi2. now asimpl.
+    + rewrite IHphi1. reflexivity.
+    + f_equal. now asimpl. change (var_prog 0) with ((ren_prog rho id (var_prog 0))) at 2.
+      rewrite <- IHphi2. asimpl. unfold funcomp. now rewrite !IHphi2.
   - f_equal. f_equal; try apply trans_I_ren. asimpl. unfold funcomp. f_equal.
-    rewrite <- IHphi. asimpl. apply extRen_spec; trivial. now intros [].
+    change (var_prog 0) with ((ren_prog (upRen_prog_prog rho) id (var_prog 0))) at 2.
+    rewrite <- IHphi. asimpl. unfold funcomp. now rewrite !IHphi.
   - now rewrite !ttrans_E_ren, ttrans_T_ren.
   - induction t in sigma |- *; cbn; trivial. f_equal. f_equal.
     + now rewrite trans_T_ren.
     + now rewrite trans_I_ren.
-    + asimpl. unfold funcomp. rewrite <- trans_S_ren. apply extRen_spec; trivial. now intros [].
+    + asimpl. unfold funcomp. now rewrite trans_S_ren.
 Qed.
 
-Lemma trans_S_ren_spec phi x sigma rho :
-  ren_spec rho sigma rho (trans_S phi (var_prog x)) = trans_S (ren_form rho phi) (var_prog (sigma x))
-with ttrans_E_ren_exp t sigma rho :
-  ren_exp rho sigma rho (ttrans_E t) = ttrans_E (ren_term rho t).
-Proof.
-  induction phi in x, sigma, rho |- *; cbn.
-  - rewrite trans_T_ren. f_equal. f_equal.
-    + rewrite IHphi1. reflexivity.
-    + f_equal. change (var_prog 0) with ((var_prog (swap 0))) at 2.
-      rewrite <- IHphi2. asimpl. unfold funcomp. now rewrite !IHphi2.
-  - f_equal. f_equal; try apply trans_I_ren. asimpl. unfold funcomp. f_equal.
-    change (var_prog 0) with ((var_prog (swap 0))) at 2.
-    rewrite <- IHphi. asimpl. unfold funcomp. now rewrite !IHphi.
-  - now rewrite !ttrans_E_ren_exp, ttrans_T_ren.
-  - induction t in sigma |- *; cbn; trivial. f_equal. f_equal.
-    + now rewrite trans_T_ren.
-    + now rewrite trans_I_ren.
-    + asimpl. unfold funcomp. now rewrite trans_S_ren_spec.
-Qed.
-
-Lemma trans_S_subst phi x sigma :
-  subst_spec (sigma >> ttrans_T) var_prog (sigma >> ttrans_E) (trans_S phi (var_prog x))
-  = trans_S (subst_form sigma phi) (var_prog x)
-with ttrans_E_subst t sigma :
-  subst_exp (sigma >> ttrans_T) var_prog (sigma >> ttrans_E) (ttrans_E t)
+Lemma trans_S_subst phi e sigma rho :
+  subst_spec (sigma >> ttrans_T) rho (sigma >> ttrans_E) (trans_S phi e)
+  = trans_S (subst_form sigma phi) (subst_prog (sigma >> ttrans_T) rho e)
+with ttrans_E_subst t sigma rho :
+  subst_exp (sigma >> ttrans_T) rho (sigma >> ttrans_E) (ttrans_E t)
   = ttrans_E (subst_term sigma t).
 Proof.
-  induction phi in x, sigma |- *; cbn.
+  induction phi in e, sigma, rho |- *; cbn.
   - f_equal. 2: f_equal. 3: f_equal.
     + now rewrite trans_T_subst.
-    + rewrite <- IHphi1. asimpl. unfold funcomp. apply ext_spec; try now intros [].
-      intros n. rewrite ttrans_E_ren_exp. now asimpl.
-    + rewrite <- IHphi2. asimpl. unfold funcomp. apply ext_spec; try now intros [].
-      intros n. rewrite !ttrans_E_ren_exp. now asimpl.
+    + change (var_prog 0) with (subst_prog (sigma >> ttrans_T) (up_prog_prog rho) (var_prog 0)).
+      rewrite <- IHphi1. asimpl. unfold funcomp. apply ext_spec; try now intros [].
+      intros n. rewrite ttrans_E_ren. now asimpl.
+    + now asimpl.
+    + change (var_prog 0) with (subst_prog (sigma >> ttrans_T) (up_prog_prog rho) (var_prog 0)).
+      rewrite <- IHphi2. asimpl. unfold funcomp. apply ext_spec; try now intros [].
+      intros n. rewrite !ttrans_E_ren. now asimpl.
   - f_equal. f_equal; try apply trans_I_subst. asimpl. unfold funcomp. f_equal.
-    rewrite <- IHphi. rewrite substRen_spec. apply ext_spec; intros []; cbn; trivial.
-    + asimpl. apply ttrans_T_ren.
-    + asimpl. unfold funcomp. rewrite !ttrans_E_ren_exp. now asimpl.
+    erewrite ext_spec, IHphi. rewrite trans_S_ren. cbn.
+    3: reflexivity. cbn. rewrite rinstId'_form. reflexivity.
+    + intros []; cbn; trivial. apply ttrans_T_ren.
+    + intros []; cbn; trivial. now rewrite ttrans_E_ren.
   - now rewrite !ttrans_E_subst, ttrans_T_subst.
   - induction t in sigma |- *; cbn; trivial. f_equal. f_equal.
     + rewrite <- trans_T_subst. asimpl. unfold funcomp. cbn. apply ext_type.
       intros []; cbn; trivial. now rewrite ttrans_T_ren.
     + now rewrite trans_I_subst.
-    + asimpl. unfold funcomp. rewrite <- trans_S_subst. apply ext_spec.
-      * intros []; cbn; trivial. now rewrite ttrans_T_ren.
-      * now intros [].
-      * intros []; cbn; trivial. rewrite <- ttrans_E_ren. now rewrite !ttrans_E_ren_exp.
+    + asimpl. unfold funcomp.
+      set (sigma' := var_term 0 .: (fun x : nat => (sigma x) ⟨↑⟩)).
+      set (rho' := var_prog 0 .: (fun x : nat => (rho x) ⟨↑;↑⟩)).
+      change (var_prog 0) with (subst_prog (sigma' >> ttrans_T) rho' (var_prog 0)) at 3.
+      rewrite <- trans_S_subst. apply ext_spec; intros []; cbn; trivial.
+      * asimpl. apply ttrans_T_ren.
+      * rewrite !ttrans_E_ren. now asimpl.
 Qed.
 
-Lemma trans_S_subst_spec phi e sigma :
-  subst_spec var_type sigma var_exp (trans_S phi e) = trans_S phi (subst_prog var_type sigma e)
-with ttrans_E_subst_exp t sigma :
-  subst_exp var_type sigma var_exp (ttrans_E t) = ttrans_E t.
+Lemma trans_S_subst' phi x sigma :
+  subst_spec (sigma >> ttrans_T) var_prog (sigma >> ttrans_E) (trans_S phi (var_prog x))
+  = trans_S (subst_form sigma phi) (var_prog x).
 Proof.
-  induction phi in e, sigma |- *; cbn.
-  - rewrite instId'_type. f_equal. f_equal. 2: f_equal.
-    + asimpl. unfold funcomp. now rewrite !IHphi1.
-    + now asimpl.
-    + asimpl. unfold funcomp. rewrite rinstInst'_spec. now rewrite !IHphi2.
-  - f_equal. f_equal. 2: f_equal.
-    + rewrite idSubst_index; trivial. now intros [].
-    + now asimpl.
-    + asimpl. unfold funcomp. erewrite ext_spec. 3: reflexivity.
-      rewrite rinstInst'_spec. now rewrite !IHphi. all: now intros [].
-  - rewrite instId'_type. f_equal; now rewrite ttrans_E_subst_exp.
-  - induction t in sigma |- *; cbn; trivial. f_equal. f_equal.
-    + rewrite idSubst_type; trivial. now intros [].
-    + rewrite idSubst_index; trivial. now intros [].
-    + erewrite ext_spec with (tau_prog := up_prog_prog (up_exp_prog (up_type_prog sigma))).
-      now rewrite trans_S_subst_spec. 2: reflexivity. all: now intros [].
+  now rewrite trans_S_subst.
+Qed.
+
+Lemma trans_S_subst_spec phi e rho :
+  subst_spec var_type rho var_exp (trans_S phi e)
+  = trans_S phi (subst_prog var_type rho e).
+Proof.
+  replace phi with (phi[var_term]) at 2.
+  - now rewrite <- trans_S_subst.
+  - now asimpl.
+Qed.
+
+Lemma ttrans_E_subst_exp t rho :
+  subst_exp var_type rho var_exp (ttrans_E t)
+  = ttrans_E t.
+Proof.
+  replace t with (t[var_term]) at 2.
+  - now setoid_rewrite <- (@ttrans_E_subst t var_term rho).
+  - now asimpl.
 Qed.
 
 Lemma trans_SL_ren' Psi sigma n :
@@ -950,118 +1045,6 @@ Proof.
   rewrite IHPsi. now rewrite rinstInst'_spec, trans_S_subst_spec.
 Qed.
 
-Lemma is_value_ren e sig1 sig2 :
-  is_value e -> is_value e⟨sig1;sig2⟩.
-Proof.
-  induction 1; cbn in *; econstructor; eauto.
-Qed.
-
-Lemma red_prog_ren e1 e2 sig1 sig2 :
-  red_prog e1 e2 -> red_prog e1⟨sig1;sig2⟩ e2⟨sig1;sig2⟩.
-Proof.
-  induction 1; cbn in *.
-  - econstructor 1; eauto.
-  - econstructor 2. rewrite H. now asimpl.
-  - econstructor 3.
-    + rewrite H. now asimpl.
-    + now apply is_value_ren.
-  - econstructor 4. rewrite H. now asimpl.
-  - econstructor 5; eauto.
-  - econstructor 6; eauto.
-  - econstructor 7; eauto. now apply is_value_ren.
-  - econstructor 8; eauto.
-Qed.
-
-Lemma conv_prog_ren e1 e2 sig1 sig2 :
-  conv_prog e1 e2 -> conv_prog e1⟨sig1;sig2⟩ e2⟨sig1;sig2⟩.
-Proof.
-  induction 1.
-  - econstructor 1; eauto.
-  - econstructor 2; eauto.
-  - econstructor 3; eauto.
-  - econstructor 4; eauto. now apply conv_type_ren.
-Qed.
-
-Lemma conv_spec_ren phi psi sig1 sig2 sig3 :
-  conv_spec phi psi -> conv_spec phi⟨sig1;sig2;sig3⟩ psi⟨sig1;sig2;sig3⟩
-with conv_exp_ren q q' sig1 sig2 sig3 :
-  conv_exp q q' -> conv_exp q⟨sig1;sig2;sig3⟩ q'⟨sig1;sig2;sig3⟩.
-Proof.
-  induction 1 in sig1, sig2, sig3 |- *; cbn in *.
-  - econstructor 1; eauto.
-  - econstructor 2; eauto.
-  - econstructor 3; eauto.
-  - econstructor 4; eauto.
-  - econstructor 5; eauto.
-  - econstructor 6; eauto. now apply conv_prog_ren.
-  - econstructor 7; eauto.
-  - econstructor 8; eauto.
-  - econstructor 9; eauto. now apply conv_type_ren.
-  - econstructor 10; eauto.
-  - econstructor 11; eauto. now apply conv_index_ren.
-  - econstructor 12; eauto.
-  - econstructor 13; eauto. now apply conv_prog_ren.
-  - fold ren_exp. econstructor 14; eauto.
-  - fold ren_exp. econstructor 15; eauto.
-  - induction 1 in sig1, sig2, sig3 |- *; cbn in *.
-    + econstructor 1; eauto.
-    + econstructor 2; eauto.
-    + econstructor 3; eauto.
-    + econstructor 4; eauto. rewrite H. now asimpl.
-    + econstructor 5; eauto.
-    + econstructor 6; eauto. now apply conv_type_ren.
-    + fold ren_exp. econstructor 7; eauto. now apply conv_type_ren.
-    + fold ren_spec. econstructor 8; eauto. now apply conv_index_ren.
-    + fold ren_spec. econstructor 9; eauto.
-Qed.
-
-Lemma HOPL_ren sig1 sig2 sig3 A phi :
-  HOPL_prv A phi -> HOPL_prv (map (ren_spec sig1 sig2 sig3) A) (ren_spec sig1 sig2 sig3 phi).
-Proof.
-  induction 1 in sig1, sig2, sig3 |- * ; cbn in *.
-  - constructor. now apply in_map.
-  - econstructor 2. eauto.
-  - econstructor 3; eauto.
-  - econstructor 4. eapply HOPL_eq. 3: reflexivity.
-    + apply IHHOPL_prv.
-    + rewrite !map_map. apply map_ext. intros psi. now asimpl.
-  - eapply HOPL_eq. 2: reflexivity.
-    + econstructor 5 with (t := t⟨sig1⟩). apply IHHOPL_prv.
-    + cbn. now asimpl.
-  - econstructor 6. eapply HOPL_eq. 3: reflexivity.
-    + apply IHHOPL_prv.
-    + rewrite !map_map. apply map_ext. intros psi. now asimpl.
-  - eapply HOPL_eq. 2: reflexivity.
-    + econstructor 7 with (e := ren_prog sig1 sig2 e). apply IHHOPL_prv.
-    + cbn. now asimpl.
-  - econstructor 8. eapply HOPL_eq. 3: reflexivity.
-    + apply IHHOPL_prv.
-    + rewrite !map_map. apply map_ext. intros psi. now asimpl.
-  - eapply HOPL_eq. 2: reflexivity.
-    + econstructor 9 with (q := ren_exp sig1 sig2 sig3 q). apply IHHOPL_prv.
-    + cbn. now asimpl.
-  - econstructor 10. eapply HOPL_eq. 2: reflexivity.
-    + apply IHHOPL_prv.
-    + now asimpl.
-  - eapply HOPL_eq. 2: reflexivity.
-    + econstructor 11. apply IHHOPL_prv.
-    + now asimpl.
-  - constructor 12. eapply HOPL_eq. 2: reflexivity.
-    + apply IHHOPL_prv.
-    + now asimpl.
-  - constructor 13. eapply HOPL_eq. 2: reflexivity.
-    + apply IHHOPL_prv.
-    + cbn. now asimpl.
-  - econstructor 14. 2: apply IHHOPL_prv2. eapply HOPL_eq; try apply IHHOPL_prv1.
-    2: reflexivity. f_equal. rewrite !map_map. apply map_ext. intros phi1. now asimpl.
-  - eapply HOPL_eq with (phi := subst_spec var_type ((ren_prog sig1 sig2 e1)..) var_exp (ren_spec sig1 (upRen_prog_prog sig2) sig3 phi)).
-    2: reflexivity. econstructor 15 with (e2 := ren_prog sig1 sig2 e2).
-    + now apply red_prog_ren.
-    + eapply HOPL_eq. 2: reflexivity. apply IHHOPL_prv. now asimpl.
-    + now asimpl.
-  - econstructor 16; try apply IHHOPL_prv. now apply conv_spec_ren.
-Qed.
-
 Theorem soundness' Psi psi :
   HOL_prv Psi psi -> exists e, HOPL_prv (trans_SL Psi) (after e (trans_S psi (var_prog 0))).
 Proof.
@@ -1108,23 +1091,23 @@ Proof.
     + cbn. reflexivity.
     + cbn. f_equal.
       * now asimpl.
-      * rewrite substSubst_spec, <- trans_S_subst.
+      * rewrite substSubst_spec, <- trans_S_subst'.
         rewrite !substRen_spec, renSubst_spec.
         apply ext_spec; intros []; cbn; trivial.
         -- now asimpl.
-        -- now rewrite !rinstInst'_exp, !ttrans_E_subst_exp.
+        -- now rewrite !ttrans_E_ren.
   - destruct IHHOL_prv as [e He]. exists e. eapply HOPL_MM; eauto. cbn. eapply HOPL_CONV.
     + apply cs_sym, cs_holds_exp1, ce_beta. reflexivity.
     + cbn. apply HOPL_CI. asimpl. apply HOPL_CTX. left.
       change (var_prog 0) with (subst_prog var_type (var_prog 0 .: var_prog) (var_prog 0)).
-      rewrite <- trans_S_subst_spec, <- trans_S_subst. asimpl. unfold funcomp.
-      apply ext_spec; trivial. intros []; trivial. now rewrite ttrans_E_subst_exp.
+      rewrite <- trans_S_subst_spec, <- trans_S_subst'. asimpl. unfold funcomp.
+      apply ext_spec; trivial. intros []; trivial. cbn. now rewrite ttrans_E_subst_exp.
   - destruct IHHOL_prv as [e He]. exists e. eapply HOPL_MM; eauto. cbn.
     eapply HOPL_eq. 2: reflexivity. eapply HOPL_CE. eapply HOPL_CONV.
     eapply cs_holds_exp1. eapply ce_beta. 2: apply HOPL_CTX; now left.
     cbn. reflexivity. asimpl. unfold funcomp.
     change (var_prog 0) with (subst_prog var_type (var_prog 0 .: var_prog) (var_prog 0)) at 3.
-    rewrite <- trans_S_subst_spec, <- trans_S_subst. asimpl. unfold funcomp.
+    rewrite <- trans_S_subst_spec, <- trans_S_subst'. asimpl. unfold funcomp.
     apply ext_spec; trivial. intros []; trivial. now rewrite ttrans_E_subst_exp.
 Qed.
 
@@ -1132,7 +1115,8 @@ Print Assumptions soundness'.
 
 Theorem soundness Xi Psi psi :
   (forall psi', In psi' (psi :: Psi) -> is_prop Xi psi') -> HOL_prv Psi psi
-  -> exists p, has_type Xi (map trans_T Psi) p (comp (trans_T psi)) /\ HOPL_prv (trans_SL Psi) (after p (trans_S psi)).
+  -> exists p, has_type Xi (map trans_T Psi) p (comp (trans_T psi)) /\ HOPL_prv (trans_SL Psi) (after p (trans_S psi (var_prog 0))).
 Proof.
+  
 Admitted.
   
