@@ -12,6 +12,7 @@ Import UnscopedNotations.
 Notation lup := nth_error.
 
 
+
 (** Reduction and conversion **)
 
 Inductive is_value : prog -> Prop :=
@@ -416,6 +417,7 @@ Proof.
 Qed.
 
 
+
 (** HOL deduction system **)
 
 Inductive HOL_prv (A : list form) : form -> Prop :=
@@ -433,6 +435,31 @@ Proof.
   induction 1 in A' |- *; intros HA.
   all: try unshelve (solve [econstructor; auto with datatypes]); try now econstructor.
 Qed.
+
+
+
+(** Typed HOL deduction system **)
+
+Inductive THOL_prv (Xi : list sort) (A : list form) : form -> Prop :=
+| THOL_CTX phi : In phi A -> THOL_prv Xi A phi
+| THOL_II phi psi : THOL_prv Xi (phi :: A) psi -> THOL_prv Xi A (implies phi psi)
+| THOL_IE phi psi : THOL_prv Xi A (implies phi psi) -> THOL_prv Xi A phi -> THOL_prv Xi A psi
+| THOL_AI phi s : THOL_prv (s :: Xi) (map (ren_form ↑) A) phi -> THOL_prv Xi A (all s phi)
+| THOL_AE phi s p : THOL_prv Xi A (all s phi) -> has_sort Xi p s -> THOL_prv Xi A phi[p..]
+| THOL_CI phi s p : THOL_prv Xi A phi[p..] -> THOL_prv Xi A (holds (cterm s phi) p)
+| THOL_CE phi s p : THOL_prv Xi A (holds (cterm s phi) p) -> THOL_prv Xi A phi[p..].
+
+Lemma THOL_weak Xi A A' phi :
+  THOL_prv Xi A phi -> incl A A' -> THOL_prv Xi A' phi.
+Proof.
+  induction 1 in A' |- *; intros HA.
+  all: try unshelve (solve [econstructor; auto with datatypes]); try now econstructor.
+Qed.
+
+Lemma THOL_is_prop Xi A phi :
+  (forall psi, In psi A -> is_prop Xi psi) -> THOL_prv Xi A phi -> is_prop Xi phi.
+Proof.
+Admitted.
 
 
 
@@ -1114,10 +1141,10 @@ Qed.
 Print Assumptions soundness'.
 
 Theorem soundness Xi Psi psi :
-  (forall psi', In psi' (psi :: Psi) -> is_prop Xi psi') -> HOL_prv Psi psi
+  THOL_prv Xi Psi psi
   -> exists p, has_type Xi (map trans_T Psi) p (comp (trans_T psi)) /\ HOPL_prv (trans_SL Psi) (after p (trans_S psi (var_prog 0))).
 Proof.
-  intros HP. induction 1.
+  induction 1.
 
   - (* Assumption *)
     apply In_nth_error in H as [n Hn].
@@ -1129,13 +1156,7 @@ Proof.
     apply nth_error_In in Hn. now rewrite trans_S_subst_spec.
 
   - (* Implication introduction *)
-    destruct IHHOL_prv as [e [Ht He]].
-    {
-      intros psi' [<-|[<-| Hp]].
-      - specialize (HP (implies phi psi) (or_introl eq_refl)). now inversion HP; subst.
-      - specialize (HP (implies phi psi) (or_introl eq_refl)). now inversion HP; subst.
-      - apply HP. now right.
-    }
+    destruct IHTHOL_prv as [e [Ht He]].
     exists (ret (tmabs (trans_T phi) e)). split.
     {
       cbn. apply ht_ret. apply ht_tmabs. apply Ht.
@@ -1151,9 +1172,7 @@ Proof.
     + cbn. asimpl. unfold funcomp. f_equal. apply idSubst_spec; try now intros [].
 
   - (* Implication elimination *)
-    destruct IHHOL_prv1 as [e1 [Ht1 H1]]. 2: destruct IHHOL_prv2 as [e2 [Ht2 H2]].
-    { admit. }
-    { admit. }
+    destruct IHTHOL_prv1 as [e1 [Ht1 H1]], IHTHOL_prv2 as [e2 [Ht2 H2]].
     exists (bind e1 (bind e2⟨id;S⟩ (tmapp (var_prog 1) (var_prog 0)))). split.
     {
       eapply ht_bind; try apply Ht1. apply ht_bind with ((trans_T phi)⟨id⟩).
@@ -1171,11 +1190,11 @@ Proof.
     now rewrite rinstInst'_spec, !trans_S_subst_spec.
 
   - (* Universal introduction *)
-    destruct IHHOL_prv as [e [Ht He]].
-    { admit. }
+    destruct IHTHOL_prv as [e [Ht He]].
     exists (ret (tyabs s e)). split.
     { 
-      cbn. apply ht_ret. apply ht_tyabs. admit.
+      cbn. apply ht_ret. apply ht_tyabs. rewrite map_map in *.
+      erewrite map_ext; try apply Ht. intros psi. now rewrite trans_T_ren.
     }
     apply HOPL_MI. cbn. asimpl. apply HOPL_TAI, HOPL_SAI.
     replace (after e (trans_S phi (var_prog 0))) with
@@ -1189,17 +1208,12 @@ Proof.
     + cbn. asimpl. unfold funcomp. f_equal. apply idSubst_spec; now intros [].
 
   - (* Universal elimination *)
-    destruct IHHOL_prv as [e [Ht He]].
-    {
-      intros psi [<-|Hp].
-      - apply ip_all. admit.
-      - apply HP. now right.
-    }
+    destruct IHTHOL_prv as [e [Ht He]].
     exists (bind e (tyapp (var_prog 0) (ttrans_T p))). split.
     {
       eapply ht_bind; try apply Ht.
       replace (comp (trans_T phi[p..])) with ((comp (trans_T phi))[(ttrans_T p)..]).
-      - apply ht_tyapp with s; try now apply ht_var. apply ttrans_has_kind. admit.
+      - apply ht_tyapp with s; try now apply ht_var. apply ttrans_has_kind. apply H0.
       - rewrite <- trans_T_subst. cbn. f_equal. apply ext_type. now intros [].
     }
     apply HOPL_ME. eapply HOPL_MM; try apply He. cbn.
@@ -1216,8 +1230,7 @@ Proof.
         -- now rewrite !ttrans_E_ren.
 
   - (* Comprehension introduction *)
-    destruct IHHOL_prv as [e [Ht He]].
-    { admit. }
+    destruct IHTHOL_prv as [e [Ht He]].
     exists e. split.
     {
       cbn. eapply ht_conv; try apply Ht. apply ct_comp, ct_sym, ct_beta. cbn.
@@ -1231,8 +1244,7 @@ Proof.
       apply ext_spec; trivial. intros []; trivial. cbn. now rewrite ttrans_E_subst_exp.
 
   - (* Comprehension elimination *)
-    destruct IHHOL_prv as [e [Ht He]].
-    { admit. }
+    destruct IHTHOL_prv as [e [Ht He]].
     exists e. split.
     {
       cbn in Ht. eapply ht_conv; try apply Ht. apply ct_comp, ct_beta. cbn.
@@ -1245,5 +1257,7 @@ Proof.
     change (var_prog 0) with (subst_prog var_type (var_prog 0 .: var_prog) (var_prog 0)) at 3.
     rewrite <- trans_S_subst_spec, <- trans_S_subst'. asimpl. unfold funcomp.
     apply ext_spec; trivial. intros []; trivial. now rewrite ttrans_E_subst_exp.
-Admitted.
+Qed.
+
+Print Assumptions soundness.
   
