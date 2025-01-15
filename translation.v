@@ -18,7 +18,7 @@ Notation lup := nth_error.
 Inductive is_value : prog -> Prop :=
 | iv_var x : is_value (var_prog x)
 | iv_tyabs k e : is_value (tyabs k e)
-| iv_tmapp t e : is_value (tmabs t e)
+| iv_tmabs t e : is_value (tmabs t e)
 | iv_ret e : is_value (ret e).
 
 Inductive red_prog : prog -> prog -> Prop :=
@@ -222,7 +222,7 @@ Inductive has_type (Delta : list kind) (Gamma : list type) : prog -> type -> Pro
 | ht_tyabs e t k : has_type (k :: Delta) (map (ren_type ↑) Gamma) e t
                    -> has_type Delta Gamma (tyabs k e) (pi k t)
 | ht_tmabs e t1 t2 : has_type Delta (t1 :: Gamma) e (comp t2)
-                     -> has_type Delta Gamma (tmabs t1 e) (arrow t1 t2)
+                     -> has_type Delta Gamma (tmabs t1 e) (arrow t1 (comp t2))
 | ht_ret e t : has_type Delta Gamma e t
                -> has_type Delta Gamma (ret e) (comp t)
 | ht_bind e1 e2 t1 t2 : has_type Delta Gamma e1 (comp t1)
@@ -231,7 +231,7 @@ Inductive has_type (Delta : list kind) (Gamma : list type) : prog -> type -> Pro
 | ht_tyapp e t1 t2 k : has_type Delta Gamma e (pi k t1)
                        -> has_kind Delta t2 k
                        -> has_type Delta Gamma (tyapp e t2) t1[t2..]
-| ht_tmapp e1 e2 t1 t2 : has_type Delta Gamma e1 (arrow t1 t2)
+| ht_tmapp e1 e2 t1 t2 : has_type Delta Gamma e1 (arrow t1 (comp t2))
                          -> has_type Delta Gamma e2 t1
                          -> has_type Delta Gamma (tmapp e1 e2) (comp t2)
 | ht_conv e t1 t2 : conv_type t1 t2
@@ -893,7 +893,7 @@ Fixpoint trans_I (s : sort) (t : type) : index :=
 
 Fixpoint trans_T (phi : form) : type :=
   match phi with
-  | implies phi psi => arrow (trans_T phi) (trans_T psi)
+  | implies phi psi => arrow (trans_T phi) (comp (trans_T psi))
   | all s phi => pi s (comp (trans_T phi))
   | holds p p' => app (ttrans_T p) (ttrans_T p')
   end
@@ -1095,7 +1095,7 @@ with ttrans_has_kind Xi p s :
   has_sort Xi p s -> has_kind Xi (ttrans_T p) s.
 Proof.
   - induction phi in Xi |- *; inversion 1; subst.
-    + cbn. apply hk_arrow; try now apply IHphi1. now apply IHphi2.
+    + cbn. apply hk_arrow; try now apply IHphi1. apply hk_comp. now apply IHphi2.
     + cbn. apply hk_pi. apply hk_comp. now apply (IHphi (n :: Xi)).
     + cbn. apply hk_app with s; now apply ttrans_has_kind.
   - induction p in Xi |- *; inversion 1; subst.
@@ -1284,7 +1284,8 @@ Qed.
 
 Theorem soundness Xi Psi psi :
   THOL_prv Xi Psi psi
-  -> exists p, has_type Xi (map trans_T Psi) p (comp (trans_T psi)) /\ HOPL_prv (trans_SL Psi) (after p (trans_S psi (var_prog 0))).
+    -> exists p, has_type Xi (map trans_T Psi) p (comp (trans_T psi))
+      /\ HOPL_prv (trans_SL Psi) (after p (trans_S psi (var_prog 0))).
 Proof.
   induction 1.
 
