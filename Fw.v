@@ -391,6 +391,22 @@ Section Fw.
   Lemma transFw_spec_conv phi psi :
     conv_spec phi psi -> conv_spec (transFw_spec phi) (transFw_spec psi).
   Proof.
+    induction 1; cbn in *.
+    - constructor 1.
+    - now constructor 2.
+    - econstructor 3; eauto.
+    - now constructor 4.
+    - now constructor 5.
+    - admit.
+    - admit.
+    - now constructor 8.
+    - constructor 9. now apply transFw_type_conv.
+    - now constructor 10.
+    - constructor 11. now apply transFw_index_conv.
+    - now constructor 12.
+    - constructor 13. admit.
+    - constructor 14. admit.
+    - constructor 15. admit.
   Admitted.
 
   Lemma HOPL_Fw Phi phi :
@@ -451,12 +467,10 @@ End Fw.
 
 Module Trivial.
 
-  Variable t0 : type.
-
   Definition icomp (t : type) := t.
   Definition iret (e : prog) := e.
-  Definition ibind (e e' : prog) := tmapp (tmabs t0 e') e.
-  Definition iafter (e : prog) (phi : spec) := phi.
+  Definition ibind (e e' : prog) := subst_prog (var_type) (e..) e'.
+  Definition iafter (e : prog) (phi : spec) := subst_spec (var_type) (e..) (var_exp) phi.
 
   Lemma instantiate Xi Psi psi :
     THOL_prv Xi Psi psi -> True.
@@ -464,19 +478,16 @@ Module Trivial.
     intros H. apply (@soundness_Fw icomp iret ibind iafter) in H.
     - admit.
     - admit.
-    - intros e e'. apply rp_betatm; trivial. admit.
-    - intros e1 e2 e He. apply rp_tmapp2; trivial. constructor.
+    - intros. unfold ibind, iret. admit.
+    - intros e1 e2 e He. unfold ibind, iret. admit.
     - tauto.
     - tauto.
     - tauto.
     - tauto.
-    - intros. eapply ht_tmapp.
-      + apply ht_tmabs. admit.
-      + admit.
-    - admit.
-    - admit.
-    - admit.
-    - admit.
+    - intros. unfold ibind, iret, icomp in *. admit.
+    - intros. unfold ibind, iret, icomp, iafter in *. admit.
+    - intros. apply H0.
+    - intros. unfold ibind, iret, icomp, iafter in *. asimpl in H0. cbn in *. apply H0.
   Admitted.
 
 End Trivial.

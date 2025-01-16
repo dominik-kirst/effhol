@@ -18,8 +18,8 @@ Notation lup := nth_error.
 Inductive is_value : prog -> Prop :=
 | iv_var x : is_value (var_prog x)
 | iv_tyabs k e : is_value (tyabs k e)
-| iv_tmabs t e : is_value (tmabs t e)
-| iv_ret e : is_value (ret e).
+| iv_tmabs t e : is_value (tmabs t e).
+(*| iv_ret e : is_value (ret e).*)
 
 Inductive red_prog : prog -> prog -> Prop :=
 | rp_trans e1 e2 e3 : red_prog e1 e2 -> red_prog e2 e3 -> red_prog e1 e3
