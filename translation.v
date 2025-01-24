@@ -881,6 +881,17 @@ Proof.
   - now apply trans_form_conv in H as <-.
 Qed.
 
+Lemma Consistency fal :
+  (* assuming that the translation of fal behaves like falsity *)
+  (forall phi, HOL_prv nil (implies (trans_form fal) phi))
+  (* and assuming that fal behaves like falsity *)
+  -> (forall phi, HOPL_prv nil (spimplies fal phi))
+  (* any inconsistency in HOPL would imply an inconcistency in HOL *)
+  -> HOPL_prv nil fal -> HOL_prv nil (trans_form fal).
+Proof.
+  intros _ _ H % HOPL_HOL. assumption.
+Qed.
+
 
 
 (** Translation from HOL to HOPL **)
