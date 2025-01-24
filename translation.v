@@ -22,14 +22,14 @@ Inductive is_value : prog -> Prop :=
 (*| iv_ret e : is_value (ret e).*)
 
 Inductive red_prog : prog -> prog -> Prop :=
-| rp_trans e1 e2 e3 : red_prog e1 e2 -> red_prog e2 e3 -> red_prog e1 e3
+(*| rp_trans e1 e2 e3 : red_prog e1 e2 -> red_prog e2 e3 -> red_prog e1 e3*)
 | rp_betaty k e t t' : t' = subst_prog (t..) var_prog e -> red_prog (tyapp (tyabs k e) t) t'
 | rp_betatm t e1 e2 e : e = subst_prog var_type (e2..) e1 -> is_value e2 -> red_prog (tmapp (tmabs t e1) e2) e
-| rp_ret e1 e2 e : e = subst_prog var_type (e1..) e2 -> red_prog (bind (ret e1) e2) e
-| rp_tyapp e1 e2 t : red_prog e1 e2 -> red_prog (tyapp e1 t) (tyapp e2 t)
+| rp_ret e1 e2 e : e = subst_prog var_type (e1..) e2 -> red_prog (bind (ret e1) e2) e.
+(*| rp_tyapp e1 e2 t : red_prog e1 e2 -> red_prog (tyapp e1 t) (tyapp e2 t)
 | rp_tmapp1 e1 e2 e : red_prog e1 e2 -> red_prog (tmapp e1 e) (tmapp e2 e)
 | rp_tmapp2 e1 e2 e : red_prog e1 e2 -> is_value e -> red_prog (tmapp e e1) (tmapp e e2)
-| rp_bind e1 e2 e : red_prog e1 e2 -> red_prog (bind e1 e) (bind e2 e).
+| rp_bind e1 e2 e : red_prog e1 e2 -> red_prog (bind e1 e) (bind e2 e).*)
 
 Inductive conv_type : type -> type -> Prop :=
 | ct_refl t : conv_type t t
@@ -100,16 +100,16 @@ Lemma red_prog_ren e1 e2 sig1 sig2 :
   red_prog e1 e2 -> red_prog e1⟨sig1;sig2⟩ e2⟨sig1;sig2⟩.
 Proof.
   induction 1; cbn in *.
-  - econstructor 1; eauto.
-  - econstructor 2. rewrite H. now asimpl.
-  - econstructor 3.
+  (*- econstructor 1; eauto.*)
+  - econstructor 1. rewrite H. now asimpl.
+  - econstructor 2.
     + rewrite H. now asimpl.
     + now apply is_value_ren.
-  - econstructor 4. rewrite H. now asimpl.
-  - econstructor 5; eauto.
+  - econstructor 3. rewrite H. now asimpl.
+  (*- econstructor 5; eauto.
   - econstructor 6; eauto.
   - econstructor 7; eauto. now apply is_value_ren.
-  - econstructor 8; eauto.
+  - econstructor 8; eauto.*)
 Qed.
 
 Lemma conv_type_ren t1 t2 xi :

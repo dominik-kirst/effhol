@@ -6,3 +6,4 @@ core_axioms.v
 unscoped_axioms.v
 hopl.v
 translation.v
+instantiation.v

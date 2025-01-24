@@ -369,23 +369,22 @@ Section Fw.
   Lemma transFw_prog_is_value e :
     is_value e -> is_value (transFw_prog e).
   Proof.
-    induction 1; cbn in *; try constructor.
-    apply iret_is_value.
+    inversion 1; subst; constructor.
   Qed.
 
   Lemma transFw_prog_red e e' :
     red_prog e e' -> red_prog (transFw_prog e) (transFw_prog e').
   Proof.
     induction 1; cbn in *.
-    - econstructor 1; eauto.
-    - subst. constructor 2. rewrite <- transFw_prog_subst. apply ext_prog. all: now intros [].
-    - subst. constructor 3; try now apply transFw_prog_is_value.
+    (*- econstructor 1; eauto.*)
+    - subst. constructor 1. rewrite <- transFw_prog_subst. apply ext_prog. all: now intros [].
+    - subst. constructor 2; try now apply transFw_prog_is_value.
       rewrite <- transFw_prog_subst. apply ext_prog. all: now intros [].
     - subst. rewrite <- transFw_prog_subst. erewrite ext_prog. apply iret_red_prog. all: now intros [].
-    - now constructor.
+    (*- now constructor.
     - now constructor.
     - constructor. assumption. now apply transFw_prog_is_value.
-    - now apply ibind_red_prog.
+    - now apply ibind_red_prog.*)
   Qed.
 
   Lemma transFw_spec_conv phi psi :
