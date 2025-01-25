@@ -123,6 +123,13 @@ Section Fw.
   Hypothesis icomp_subst :
     forall sigma t, (icomp t) [sigma] = icomp (t [sigma]).
 
+  Hypothesis iret_subst :
+    forall xi1 xi2 e, subst_prog xi1 xi2 (iret e) = iret (subst_prog xi1 xi2 e).
+
+  Hypothesis ibind_subst :
+    forall xi1 xi2 e e', subst_prog xi1 xi2 (ibind e e')
+      = ibind (subst_prog xi1 xi2 e) (subst_prog (up_prog_type xi1) (up_prog_prog xi2) e').
+
   (* Assumptions about typing judgements *)
 
   Hypothesis icomp_has_kind :
@@ -341,11 +348,40 @@ Section Fw.
 
   (* Soundness of translation of HOPL into F_w *)
 
+  Lemma transFw_prog_ren xi1 xi2 e :
+    ren_prog xi1 xi2 (transFw_prog e)
+      = transFw_prog (ren_prog xi1 xi2 e).
+  Proof.
+    induction e in xi1, xi2 |- *; cbn in *.
+    - reflexivity.
+    - now rewrite IHe.
+    - now rewrite IHe, transFw_type_ren.
+    - now rewrite IHe, transFw_type_ren.
+    - now rewrite IHe1, IHe2.
+    - now rewrite rinstInst_prog, iret_subst, <- rinstInst_prog, IHe.
+    - rewrite !rinstInst_prog, ibind_subst, <- !rinstInst_prog, <- IHe1, <- IHe2.
+      f_equal. rewrite rinstInst_prog. apply ext_prog; now intros [].
+  Qed.
+
   Lemma transFw_prog_subst xi1 xi2 e :
     subst_prog (xi1 >> transFw_type) (xi2 >> transFw_prog) (transFw_prog e)
       = transFw_prog (subst_prog xi1 xi2 e).
   Proof.
-  Admitted.
+    induction e in xi1, xi2 |- *; cbn in *.
+    - reflexivity.
+    - rewrite <- IHe. f_equal. apply ext_prog.
+      + intros []; cbn; trivial. unfold funcomp. now rewrite transFw_type_ren.
+      + intros x. unfold funcomp. cbn. now rewrite transFw_prog_ren.
+    - rewrite <- IHe, transFw_type_subst. f_equal. apply ext_prog.
+      + intros x. unfold funcomp. cbn. now rewrite transFw_type_ren.
+      + intros []; cbn; trivial. unfold funcomp. cbn. now rewrite transFw_prog_ren.
+    - now rewrite <- IHe, transFw_type_subst.
+    - now rewrite <- IHe1, IHe2.
+    - now rewrite <- IHe, iret_subst.
+    - rewrite <- IHe1, <- IHe2, ibind_subst. f_equal. apply ext_prog.
+      + intros x. unfold funcomp. cbn. now rewrite transFw_type_ren.
+      + intros []; cbn; trivial. unfold funcomp. cbn. now rewrite transFw_prog_ren.
+  Qed.
 
   Lemma transFw_spec_ren xi1 xi2 xi3 phi :
     ren_spec xi1 xi2 xi3 (transFw_spec phi)
@@ -460,33 +496,6 @@ Section Fw.
     - apply HOPL_Fw in H2. apply H2.
   Qed.
 
+  Print Assumptions soundness_Fw.
+
 End Fw.
-
-(* Trivial instantiation *)
-
-Module Trivial.
-
-  Definition icomp (t : type) := t.
-  Definition iret (e : prog) := e.
-  Definition ibind (e e' : prog) := subst_prog (var_type) (e..) e'.
-  Definition iafter (e : prog) (phi : spec) := subst_spec (var_type) (e..) (var_exp) phi.
-
-  Lemma instantiate Xi Psi psi :
-    THOL_prv Xi Psi psi -> True.
-  Proof.
-    intros H. apply (@soundness_Fw icomp iret ibind iafter) in H.
-    - admit.
-    - admit.
-    - intros. unfold ibind, iret. admit.
-    - intros e1 e2 e He. unfold ibind, iret. admit.
-    - tauto.
-    - tauto.
-    - tauto.
-    - tauto.
-    - intros. unfold ibind, iret, icomp in *. admit.
-    - intros. unfold ibind, iret, icomp, iafter in *. admit.
-    - intros. apply H0.
-    - intros. unfold ibind, iret, icomp, iafter in *. asimpl in H0. cbn in *. apply H0.
-  Admitted.
-
-End Trivial.
