@@ -132,7 +132,7 @@ Section Fw.
 
   Hypothesis iafter_subst :
     forall xi1 xi2 xi3 e phi, subst_spec xi1 xi2 xi3 (iafter e phi)
-      = iafter (subst_prog xi1 xi2 e) (subst_spec xi1 (up_prog_prog xi2) xi3 phi).
+      = iafter (subst_prog xi1 xi2 e) (subst_spec (up_prog_type xi1) (up_prog_prog xi2) (up_prog_exp xi3) phi).
 
   (* Assumptions about typing judgements *)
 
@@ -419,9 +419,44 @@ Section Fw.
 
   Lemma transFw_spec_subst xi1 xi2 xi3 phi :
     subst_spec (xi1 >> transFw_type) (xi2 >> transFw_prog) (xi3 >> transFw_exp) (transFw_spec phi)
-      = transFw_spec (subst_spec xi1 xi2 xi3 phi).
+      = transFw_spec (subst_spec xi1 xi2 xi3 phi)
+  with transFw_exp_subst xi1 xi2 xi3 q :
+    subst_exp (xi1 >> transFw_type) (xi2 >> transFw_prog) (xi3 >> transFw_exp) (transFw_exp q)
+      = transFw_exp (subst_exp xi1 xi2 xi3 q).
   Proof.
-  Admitted.
+    induction phi in xi1, xi2, xi3 |- *; cbn in *.
+    - now rewrite !transFw_exp_subst, transFw_prog_subst.
+    - now rewrite IHphi1, IHphi2.
+    - rewrite iafter_subst, transFw_prog_subst, <- IHphi.
+      f_equal. apply ext_spec.
+      + intros x. apply transFw_type_ren.
+      + intros []; cbn; trivial. apply transFw_prog_ren.
+      + intros x. apply transFw_exp_ren.
+    - rewrite <- IHphi. f_equal. apply ext_spec.
+      + intros []; cbn; trivial. apply transFw_type_ren.
+      + intros x. apply transFw_prog_ren.
+      + intros x. apply transFw_exp_ren.
+    - rewrite <- IHphi, transFw_type_subst. f_equal. apply ext_spec.
+      + intros x. apply transFw_type_ren.
+      + intros []; cbn; trivial. apply transFw_prog_ren.
+      + intros x. apply transFw_exp_ren.
+    - rewrite <- IHphi, transFw_index_subst. f_equal. apply ext_spec.
+      + intros x. apply transFw_type_ren.
+      + intros x. apply transFw_prog_ren.
+      + intros []; cbn; trivial. apply transFw_exp_ren.
+    - induction q in xi1, xi2, xi3 |- *; cbn in *.
+      + reflexivity.
+      + rewrite transFw_type_subst, transFw_index_subst, <- transFw_spec_subst.
+        f_equal. apply ext_spec.
+        * intros x. unfold funcomp. cbn. now rewrite !transFw_type_ren.
+        * intros []; cbn; trivial. unfold funcomp. cbn. now rewrite !transFw_prog_ren.
+        * intros []; cbn; trivial. unfold funcomp. cbn. now rewrite !transFw_exp_ren.
+      + rewrite <- IHq. f_equal. apply ext_exp.
+        * intros []; cbn; trivial. apply transFw_type_ren.
+        * intros x. apply transFw_prog_ren.
+        * intros x. apply transFw_exp_ren.
+      + now rewrite <- IHq, transFw_type_subst.
+  Qed.
 
   Lemma transFw_prog_is_value e :
     is_value e -> is_value (transFw_prog e).
@@ -444,8 +479,30 @@ Section Fw.
     - now apply ibind_red_prog.*)
   Qed.
 
+  Hypothesis iafter_conv_prog :
+    forall e1 e2 phi, conv_prog e1 e2
+      -> conv_spec (iafter (transFw_prog e1) (transFw_spec phi))
+        (iafter (transFw_prog e2) (transFw_spec phi)).
+
+  Hypothesis iafter_conv_spec :
+    forall e phi psi, conv_spec phi psi
+      -> conv_spec (iafter (transFw_prog e) (transFw_spec phi))
+        (iafter (transFw_prog e) (transFw_spec psi)).
+
+  Lemma transFw_prog_conv e e' :
+    conv_prog e e' -> conv_prog (transFw_prog e) (transFw_prog e').
+  Proof.
+    induction 1; cbn in *.
+    - constructor 1.
+    - now constructor 2.
+    - econstructor 3; eauto.
+    - constructor 4. now apply transFw_type_conv.
+  Qed.
+
   Lemma transFw_spec_conv phi psi :
-    conv_spec phi psi -> conv_spec (transFw_spec phi) (transFw_spec psi).
+    conv_spec phi psi -> conv_spec (transFw_spec phi) (transFw_spec psi)
+  with transFw_exp_conv q q' :
+    conv_exp q q' -> conv_exp (transFw_exp q) (transFw_exp q').
   Proof.
     induction 1; cbn in *.
     - constructor 1.
@@ -453,17 +510,30 @@ Section Fw.
     - econstructor 3; eauto.
     - now constructor 4.
     - now constructor 5.
-    - admit.
-    - admit.
+    - now apply iafter_conv_prog.
+    - now apply iafter_conv_spec.
     - now constructor 8.
     - constructor 9. now apply transFw_type_conv.
     - now constructor 10.
     - constructor 11. now apply transFw_index_conv.
     - now constructor 12.
-    - constructor 13. admit.
-    - constructor 14. admit.
-    - constructor 15. admit.
-  Admitted.
+    - constructor 13. now apply transFw_prog_conv.
+    - constructor 14. now apply transFw_exp_conv.
+    - constructor 15. now apply transFw_exp_conv.
+    - induction 1; cbn in *.
+      + constructor 1.
+      + now constructor 2.
+      + econstructor 3; eauto.
+      + constructor 4. subst. rewrite <- transFw_exp_subst. apply ext_exp.
+        * now intros [].
+        * reflexivity.
+        * reflexivity.
+      + now constructor 5.
+      + constructor 6. now apply transFw_type_conv.
+      + constructor 7. now apply transFw_type_conv.
+      + constructor 8. now apply transFw_index_conv.
+      + constructor 9. now apply transFw_spec_conv.
+  Qed.
 
   Lemma HOPL_Fw Phi phi :
     HOPL_prv Phi phi -> Fw_prv (map transFw_spec Phi) (transFw_spec phi).
