@@ -106,14 +106,14 @@ Section Fw.
 
   (* Assumptions about reduction and conversion *)
 
-  Hypothesis iret_is_value :
-    forall e, is_value (iret e).
+  (*Hypothesis iret_is_value :
+    forall e, is_value (iret e).*)
 
   Hypothesis iret_red_prog :
     forall e e', red_prog (ibind (iret e) e') (subst_prog var_type (e..) e').
 
-  Hypothesis ibind_red_prog :
-    forall e1 e2 e, red_prog e1 e2 -> red_prog (ibind e1 e) (ibind e2 e).
+  (*Hypothesis ibind_red_prog :
+    forall e1 e2 e, red_prog e1 e2 -> red_prog (ibind e1 e) (ibind e2 e).*)
 
   Hypothesis icomp_conv :
     forall t t', conv_type t t' -> conv_type (icomp t) (icomp t').
@@ -129,6 +129,10 @@ Section Fw.
   Hypothesis ibind_subst :
     forall xi1 xi2 e e', subst_prog xi1 xi2 (ibind e e')
       = ibind (subst_prog xi1 xi2 e) (subst_prog (up_prog_type xi1) (up_prog_prog xi2) e').
+
+  Hypothesis iafter_subst :
+    forall xi1 xi2 xi3 e phi, subst_spec xi1 xi2 xi3 (iafter e phi)
+      = iafter (subst_prog xi1 xi2 e) (subst_spec xi1 (up_prog_prog xi2) xi3 phi).
 
   (* Assumptions about typing judgements *)
 
@@ -385,9 +389,26 @@ Section Fw.
 
   Lemma transFw_spec_ren xi1 xi2 xi3 phi :
     ren_spec xi1 xi2 xi3 (transFw_spec phi)
-      = transFw_spec (ren_spec xi1 xi2 xi3 phi).
+      = transFw_spec (ren_spec xi1 xi2 xi3 phi)
+  with transFw_exp_ren xi1 xi2 xi3 q :
+    ren_exp xi1 xi2 xi3 (transFw_exp q)
+      = transFw_exp (ren_exp xi1 xi2 xi3 q).
   Proof.
-  Admitted.
+    induction phi in xi1, xi2, xi3 |- *; cbn in *.
+    - now rewrite !transFw_exp_ren, transFw_prog_ren.
+    - now rewrite IHphi1, IHphi2.
+    - rewrite <- IHphi, <- transFw_prog_ren.
+      rewrite !rinstInst_spec, iafter_subst, <- rinstInst_prog.
+      f_equal. apply ext_spec; trivial. now intros [].
+    - now rewrite IHphi.
+    - now rewrite IHphi, transFw_type_ren.
+    - now rewrite IHphi, transFw_index_ren.
+    - induction q in xi1, xi2, xi3 |- *; cbn in *.
+      + reflexivity.
+      + now rewrite transFw_type_ren, transFw_index_ren, transFw_spec_ren.
+      + now rewrite IHq.
+      + now rewrite IHq, transFw_type_ren.
+  Qed.
 
   Lemma transFw_spec_ren_ctx xi1 xi2 xi3 Phi :
     list_map (ren_spec xi1 xi2 xi3) (list_map transFw_spec Phi)
