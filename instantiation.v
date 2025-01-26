@@ -118,6 +118,14 @@ Section Fw.
   Hypothesis icomp_conv :
     forall t t', conv_type t t' -> conv_type (icomp t) (icomp t').
 
+  Hypothesis iafter_conv_prog :
+    forall e1 e2 phi, conv_prog e1 e2
+      -> conv_spec (iafter e1 phi) (iafter e2 phi).
+
+  Hypothesis iafter_conv_spec :
+    forall e phi psi, conv_spec phi psi
+      -> conv_spec (iafter e phi) (iafter e psi).
+
   (* Assumptions about substitution *)
 
   Hypothesis icomp_subst :
@@ -479,16 +487,6 @@ Section Fw.
     - now apply ibind_red_prog.*)
   Qed.
 
-  Hypothesis iafter_conv_prog :
-    forall e1 e2 phi, conv_prog e1 e2
-      -> conv_spec (iafter (transFw_prog e1) (transFw_spec phi))
-        (iafter (transFw_prog e2) (transFw_spec phi)).
-
-  Hypothesis iafter_conv_spec :
-    forall e phi psi, conv_spec phi psi
-      -> conv_spec (iafter (transFw_prog e) (transFw_spec phi))
-        (iafter (transFw_prog e) (transFw_spec psi)).
-
   Lemma transFw_prog_conv e e' :
     conv_prog e e' -> conv_prog (transFw_prog e) (transFw_prog e').
   Proof.
@@ -510,7 +508,7 @@ Section Fw.
     - econstructor 3; eauto.
     - now constructor 4.
     - now constructor 5.
-    - now apply iafter_conv_prog.
+    - now apply iafter_conv_prog, transFw_prog_conv.
     - now apply iafter_conv_spec.
     - now constructor 8.
     - constructor 9. now apply transFw_type_conv.
