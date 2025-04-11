@@ -1,6 +1,8 @@
 Set Implicit Arguments.
 Unset Strict Implicit.
 
+From Coq.Relations Require Import Relation_Operators.
+
 Require Import List.
 Require Import core unscoped hopl.
 
@@ -10,6 +12,10 @@ Import CombineNotations.
 Import UnscopedNotations.
 
 Notation lup := nth_error.
+
+(** Notes about the formalisation:
+    - We don't have the base membership formulas
+**)
 
 
 
@@ -31,17 +37,17 @@ Inductive red_prog : prog -> prog -> Prop :=
 | rp_tmapp2 e1 e2 e : red_prog e1 e2 -> is_value e -> red_prog (tmapp e e1) (tmapp e e2)
 | rp_bind e1 e2 e : red_prog e1 e2 -> red_prog (bind e1 e) (bind e2 e).*)
 
-Inductive conv_type : type -> type -> Prop :=
-| ct_refl t : conv_type t t
-| ct_sym t1 t2 : conv_type t1 t2 -> conv_type t2 t1
-| ct_trans t1 t2 t3 : conv_type t1 t2 -> conv_type t2 t3 -> conv_type t1 t3
-| ct_beta k t1 t2 t : t = subst_type (t2..) t1 -> conv_type (app (abs k t1) t2) t
-| ct_app1 t1 t2 t : conv_type t1 t2 -> conv_type (app t1 t) (app t2 t)
-| ct_app2 t1 t2 t : conv_type t1 t2 -> conv_type (app t t1) (app t t2)
-| ct_arrow1 t1 t2 t : conv_type t1 t2 -> conv_type (arrow t1 t) (arrow t2 t)
-| ct_arrow2 t1 t2 t : conv_type t1 t2 -> conv_type (arrow t t1) (arrow t t2)
-| ct_pi t1 t2 k : conv_type t1 t2 -> conv_type (pi k t1) (pi k t2)
-| ct_comp t1 t2 : conv_type t1 t2 -> conv_type (comp t1) (comp t2).
+Inductive tred_type : type -> type -> Prop :=
+| ct_beta k t1 t2 t : t = subst_type (t2..) t1 -> tred_type (app (abs k t1) t2) t
+| ct_app1 t1 t2 t : tred_type t1 t2 -> tred_type (app t1 t) (app t2 t)
+| ct_app2 t1 t2 t : tred_type t1 t2 -> tred_type (app t t1) (app t t2)
+| ct_arrow1 t1 t2 t : tred_type t1 t2 -> tred_type (arrow t1 t) (arrow t2 t)
+| ct_arrow2 t1 t2 t : tred_type t1 t2 -> tred_type (arrow t t1) (arrow t t2)
+| ct_pi t1 t2 k : tred_type t1 t2 -> tred_type (pi k t1) (pi k t2)
+| ct_comp t1 t2 : tred_type t1 t2 -> tred_type (comp t1) (comp t2).
+
+Definition conv_type :=
+  clos_refl_sym_trans _ tred_type.
 
 Inductive conv_prog : prog -> prog -> Prop :=
 | cp_refl e : conv_prog e e
@@ -112,13 +118,10 @@ Proof.
   - econstructor 8; eauto.*)
 Qed.
 
-Lemma conv_type_ren t1 t2 xi :
-  conv_type t1 t2 -> conv_type t1⟨xi⟩ t2⟨xi⟩.
+Lemma tred_type_ren t1 t2 xi :
+  tred_type t1 t2 -> tred_type t1⟨xi⟩ t2⟨xi⟩.
 Proof.
   induction 1 in xi |-*; cbn.
-  - apply ct_refl.
-  - now apply ct_sym.
-  - eapply ct_trans; eauto.
   - apply ct_beta. rewrite H. now asimpl.
   - now apply ct_app1.
   - now apply ct_app2.
@@ -126,6 +129,16 @@ Proof.
   - now apply ct_arrow2.
   - now apply ct_pi.
   - now apply ct_comp.
+Qed.
+
+Lemma conv_type_ren t1 t2 xi :
+  conv_type t1 t2 -> conv_type t1⟨xi⟩ t2⟨xi⟩.
+Proof.
+  induction 1 in xi |-*; cbn.
+  - constructor. now apply tred_type_ren.
+  - constructor 2.
+  - constructor 3. apply IHclos_refl_sym_trans.
+  - econstructor 4; [apply IHclos_refl_sym_trans1 | apply IHclos_refl_sym_trans2].
 Qed.
 
 Lemma conv_prog_ren e1 e2 sig1 sig2 :
@@ -234,9 +247,9 @@ Inductive has_type (Delta : list kind) (Gamma : list type) : prog -> type -> Pro
 | ht_tmapp e1 e2 t1 t2 : has_type Delta Gamma e1 (arrow t1 (comp t2))
                          -> has_type Delta Gamma e2 t1
                          -> has_type Delta Gamma (tmapp e1 e2) (comp t2)
-| ht_conv e t1 t2 : conv_type t1 t2
+(*| ht_conv e t1 t2 : conv_type t1 t2
                     -> has_type Delta Gamma e t1
-                    -> has_type Delta Gamma e t2.
+                    -> has_type Delta Gamma e t2*).
 
 Inductive is_index (Delta : list kind) : index -> Prop :=
 | ii_refb t : has_kind Delta t 0 -> is_index Delta (refb t)
@@ -415,6 +428,160 @@ Proof.
   - rewrite rinstId'_type. intuition.
   - rewrite rinstId'_index. intuition.
 Qed.
+
+
+
+(** Preservation lemmas **)
+
+Lemma has_kind_subst Delta Delta' t k sigma :
+  has_kind Delta t k
+  -> (forall x k', lup Delta x = Some k' -> has_kind Delta' (sigma x) k')
+  -> has_kind Delta' t[sigma] k.
+Proof.
+  induction 1 in Delta', sigma |- *; cbn; intros HD.
+  - now apply HD.
+  - apply hk_app with k; intuition.
+  - apply hk_abs. apply IHhas_kind. intros []; cbn.
+    + intros k' [=]; subst. now constructor.
+    + intros k' Hk. apply HD in Hk. eapply has_kind_ren; eauto.
+  - apply hk_arrow; intuition.
+  - apply hk_pi. apply IHhas_kind. intros []; cbn.
+    + intros k' [=]; subst. now constructor.
+    + intros k' Hk. apply HD in Hk. eapply has_kind_ren; eauto.
+  - apply hk_comp. now apply IHhas_kind.
+Qed.
+
+Lemma has_kind_tred Delta t t' k :
+  has_kind Delta t k -> tred_type t t' -> has_kind Delta t' k.
+Proof.
+  intros H H'. revert Delta k H. induction H'; subst; intros k'; inversion 1; subst.
+  - inversion H2; subst. eapply has_kind_subst; eauto.
+    intros []; cbn; try congruence. intros. now constructor.
+  - econstructor; eauto.
+  - econstructor; eauto.
+  - econstructor; eauto.
+  - econstructor; eauto.
+  - econstructor; eauto.
+  - econstructor; eauto.
+Qed.
+
+Lemma has_kind_tred' Delta t t' :
+  has_kind Delta t' 0 -> tred_type t t' -> has_kind Delta t 0.
+Proof.
+  intros H H'. revert Delta H. induction H'; subst; intros.
+  - admit.
+  - inversion H; subst. econstructor; eauto. admit.
+Abort.
+
+Lemma has_kind_conv Delta t t' k :
+  has_kind Delta t k -> conv_type t t' -> has_kind Delta t' k.
+Proof.
+  intros H1 H2. induction H2.
+  - eapply has_kind_tred; eauto.
+  - assumption.
+  - admit.
+  - now apply IHclos_refl_sym_trans2, IHclos_refl_sym_trans1.
+Abort.
+
+Lemma has_type_subst1 Delta Delta' Gamma e t sigma :
+  has_type Delta Gamma e t
+  -> (forall n k, lup Delta n = Some k -> has_kind Delta' (sigma n) k)
+  -> has_type Delta' Gamma (subst_prog sigma var_prog e) t[sigma].
+Proof.
+Admitted.
+
+Lemma has_type_subst2 Delta Gamma Gamma' e t sigma :
+  has_type Delta Gamma e t
+  -> (forall n t, lup Gamma n = Some t -> has_type Delta Gamma' (sigma n) t)
+  -> has_type Delta Gamma' (subst_prog var_type sigma e) t.
+Proof.
+Admitted.
+
+Lemma lup_map_el X Y (f : X -> Y) L n y :
+  lup (map f L) n = Some y -> exists x, lup L n = Some x /\ y = f x.
+Proof.
+Admitted.
+
+Lemma has_type_subst Delta Delta' Gamma Gamma' e t sig1 sig2 :
+  has_type Delta Gamma e t
+  -> (forall n k, lup Delta n = Some k -> has_kind Delta' (sig1 n) k)
+  -> (forall n t, lup Gamma n = Some t -> has_type Delta' Gamma' (sig2 n) t[sig1])
+  -> has_type Delta' Gamma' (subst_prog sig1 sig2 e) t[sig1].
+Proof.
+  induction 1 in Delta', Gamma', sig1, sig2 |-*; cbn in *; intros H1 H2.
+  - now apply H2.
+  - constructor 2. apply IHhas_type.
+    + intros [] k'; cbn.
+      * intros [=]; subst. now constructor.
+      * intros H'. apply H1 in H'. eapply has_kind_ren; eauto.
+    + intros n t' H'. apply lup_map_el in H' as [t0[Ht ->]].
+      apply H2 in Ht. asimpl. rewrite <- substRen_type.
+      eapply has_type_ren; try apply Ht; trivial.
+      intros. now apply map_nth_error.
+  - constructor 3. erewrite ext_prog. apply (IHhas_type _ _ sig1 (up_prog_prog sig2)); trivial.
+    + intros [] t; cbn.
+      * intros [=]; subst. now constructor.
+      * intros H'. apply H2 in H'. setoid_rewrite <- rinstId'_type at 3.
+        eapply has_type_ren; try apply H'; cbn; trivial.
+        setoid_rewrite rinstId'_type. trivial.
+    + unfold up_prog_type. intros n. apply rinstId'_type.
+    + reflexivity.
+  - constructor 4. apply IHhas_type; trivial.
+  - econstructor 5.
+    + eapply IHhas_type1; trivial.
+    + erewrite ext_prog. apply (IHhas_type2 _ _ sig1 (up_prog_prog sig2)); trivial.
+      * intros [] t; cbn.
+        -- intros [=]; subst. now constructor.
+        -- intros H'. apply H2 in H'. setoid_rewrite <- rinstId'_type at 3.
+           eapply has_type_ren; try apply H'; cbn; trivial.
+           setoid_rewrite rinstId'_type. trivial.
+      * unfold up_prog_type. intros n. apply rinstId'_type.
+      * reflexivity.
+  - replace (t1[t2..][sig1]) with (t1[up_type_type sig1][t2[sig1]..]) by now asimpl.
+    econstructor 6. apply IHhas_type; trivial.
+    eapply has_kind_subst; try apply H0. assumption.
+  - econstructor 7.
+    + eapply IHhas_type1; trivial.
+    + eapply IHhas_type2; trivial.
+Qed.
+
+Lemma red_has_type Delta Gamma e e' t :
+  has_type Delta Gamma e t -> red_prog e e' -> has_type Delta Gamma e' t.
+Proof.
+  intros H. inversion 1; subst.
+  - inversion H; subst. inversion H3; subst.
+    eapply has_type_subst1; try apply H2.
+    + intros [] k; cbn.
+      * intros [=]; subst. assumption.
+      * apply hk_var.
+    + 
+
+
+
+  induction 1 in e' |- *; inversion 1; subst.
+  - eapply has_type_subst'; eauto. intros [] t; cbn.
+    + intros [=]; subst. inversion H; subst; trivial.
+      inversion H3; subst. admit.
+
+
+  intros H. inversion 1; subst.
+  - inversion H; subst.
+    + inversion H3; subst.
+      * eapply has_type_subst; try apply H2. intros [] k; cbn.
+        -- intros [=]; subst. assumption.
+        -- apply hk_var.
+      * inversion H2; subst.
+        -- admit.
+        -- 
+    + 
+
+
+
+  intros H1. inversion 1; subst.
+  inversion H1; subst. inversion H3; subst. eapply has_type_subst; eauto.
+
+Admitted.
+
 
 
 
@@ -1185,7 +1352,7 @@ Proof.
   - induction p in Xi, Delta |- *; inversion 1; subst.
     + cbn. apply hi_var. now apply trans_IL_lup.
     + cbn. apply hi_exabs. eapply hi_conv.
-      * apply ci_ref_type, ct_sym, ct_beta. reflexivity.
+      * apply ci_ref_type. constructor 3. constructor 1. apply ct_beta. reflexivity.
       * asimpl. unfold funcomp. rewrite idSubst_type; trivial; try now intros [].
         unfold trans_IL. rewrite trans_IL_up. apply hi_cexp.
         apply trans_is_spec; trivial. now apply ht_var.
@@ -1387,7 +1554,7 @@ Proof.
     destruct IHTHOL_prv as [e [Ht He]].
     exists e. split.
     {
-      cbn. eapply ht_conv; try apply Ht. apply ct_comp, ct_sym, ct_beta. cbn.
+      cbn. eapply ht_conv; try apply Ht. constructor 3. constructor 1. apply ct_comp, ct_beta. cbn.
       rewrite <- trans_T_subst. cbn. f_equal. apply ext_type. now intros [].
     }
     eapply HOPL_MM; eauto. cbn. eapply HOPL_CONV.
@@ -1401,7 +1568,7 @@ Proof.
     destruct IHTHOL_prv as [e [Ht He]].
     exists e. split.
     {
-      cbn in Ht. eapply ht_conv; try apply Ht. apply ct_comp, ct_beta. cbn.
+      cbn in Ht. eapply ht_conv; try apply Ht. constructor 1. apply ct_comp, ct_beta. cbn.
       rewrite <- trans_T_subst. cbn. f_equal. apply ext_type. now intros [].
     }
     eapply HOPL_MM; eauto. cbn.
