@@ -338,9 +338,9 @@ Proof.
   - apply ht_tmapp with t1⟨xi⟩.
     + apply IHhas_type1; eauto.
     + apply IHhas_type2; eauto.
-  - apply ht_conv with t1⟨xi⟩.
+  (*- apply ht_conv with t1⟨xi⟩.
     + now apply conv_type_ren.
-    + apply IHhas_type; eauto.
+    + apply IHhas_type; eauto.*)
 Qed.
 
 Lemma is_index_ren Delta Delta' xi o :
@@ -483,20 +483,6 @@ Proof.
   - now apply IHclos_refl_sym_trans2, IHclos_refl_sym_trans1.
 Abort.
 
-Lemma has_type_subst1 Delta Delta' Gamma e t sigma :
-  has_type Delta Gamma e t
-  -> (forall n k, lup Delta n = Some k -> has_kind Delta' (sigma n) k)
-  -> has_type Delta' Gamma (subst_prog sigma var_prog e) t[sigma].
-Proof.
-Admitted.
-
-Lemma has_type_subst2 Delta Gamma Gamma' e t sigma :
-  has_type Delta Gamma e t
-  -> (forall n t, lup Gamma n = Some t -> has_type Delta Gamma' (sigma n) t)
-  -> has_type Delta Gamma' (subst_prog var_type sigma e) t.
-Proof.
-Admitted.
-
 Lemma lup_map_el X Y (f : X -> Y) L n y :
   lup (map f L) n = Some y -> exists x, lup L n = Some x /\ y = f x.
 Proof.
@@ -545,43 +531,37 @@ Proof.
     + eapply IHhas_type2; trivial.
 Qed.
 
+Lemma has_type_subst' Delta Gamma Gamma' e t sigma :
+  has_type Delta Gamma e t
+  -> (forall n t, lup Gamma n = Some t -> has_type Delta Gamma' (sigma n) t)
+  -> has_type Delta Gamma' (subst_prog var_type sigma e) t.
+Proof.
+  intros. setoid_rewrite <- instId'_type. eapply has_type_subst; try apply H.
+  - intros. now constructor.
+  - setoid_rewrite instId'_type. assumption.
+Qed.
+
 Lemma red_has_type Delta Gamma e e' t :
   has_type Delta Gamma e t -> red_prog e e' -> has_type Delta Gamma e' t.
 Proof.
-  intros H. inversion 1; subst.
-  - inversion H; subst. inversion H3; subst.
-    eapply has_type_subst1; try apply H2.
-    + intros [] k; cbn.
+  inversion 1; subst; inversion 1; subst.
+  - eapply has_type_subst'; try apply H1.
+    inversion H0; subst.
+    intros [] k; cbn.
+    + intros [=]; subst. assumption.
+    + apply ht_var.
+  - inversion H0; subst.
+    eapply has_type_subst; try apply H4.
+    + intros [] k'; cbn.
       * intros [=]; subst. assumption.
       * apply hk_var.
-    + 
-
-
-
-  induction 1 in e' |- *; inversion 1; subst.
-  - eapply has_type_subst'; eauto. intros [] t; cbn.
-    + intros [=]; subst. inversion H; subst; trivial.
-      inversion H3; subst. admit.
-
-
-  intros H. inversion 1; subst.
-  - inversion H; subst.
-    + inversion H3; subst.
-      * eapply has_type_subst; try apply H2. intros [] k; cbn.
-        -- intros [=]; subst. assumption.
-        -- apply hk_var.
-      * inversion H2; subst.
-        -- admit.
-        -- 
-    + 
-
-
-
-  intros H1. inversion 1; subst.
-  inversion H1; subst. inversion H3; subst. eapply has_type_subst; eauto.
-
-Admitted.
-
+    + intros n t [t'[Ht ->]] % lup_map_el. asimpl. now constructor.
+  - inversion H0; subst.
+    eapply has_type_subst'; try apply H4.
+    intros [] k; cbn.
+    + intros [=]; subst. assumption.
+    + apply ht_var.
+Qed.
 
 
 
