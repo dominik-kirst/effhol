@@ -247,9 +247,9 @@ Inductive has_type (Delta : list kind) (Gamma : list type) : prog -> type -> Pro
 | ht_tmapp e1 e2 t1 t2 : has_type Delta Gamma e1 (arrow t1 (comp t2))
                          -> has_type Delta Gamma e2 t1
                          -> has_type Delta Gamma (tmapp e1 e2) (comp t2)
-(*| ht_conv e t1 t2 : conv_type t1 t2
+| ht_conv e t1 t2 : conv_type t1 t2
                     -> has_type Delta Gamma e t1
-                    -> has_type Delta Gamma e t2*).
+                    -> has_type Delta Gamma e t2.
 
 Inductive is_index (Delta : list kind) : index -> Prop :=
 | ii_refb t : has_kind Delta t 0 -> is_index Delta (refb t)
@@ -338,9 +338,9 @@ Proof.
   - apply ht_tmapp with t1⟨xi⟩.
     + apply IHhas_type1; eauto.
     + apply IHhas_type2; eauto.
-  (*- apply ht_conv with t1⟨xi⟩.
+  - apply ht_conv with t1⟨xi⟩.
     + now apply conv_type_ren.
-    + apply IHhas_type; eauto.*)
+    + apply IHhas_type; eauto.
 Qed.
 
 Lemma is_index_ren Delta Delta' xi o :
@@ -428,6 +428,76 @@ Proof.
   - rewrite rinstId'_type. intuition.
   - rewrite rinstId'_index. intuition.
 Qed.
+
+
+
+(** Conversion lemma **)
+
+Inductive has_type' (Delta : list kind) (Gamma : list type) : prog -> type -> Prop :=
+| ht_var' x t : lup Gamma x = Some t
+               -> has_type' Delta Gamma (var_prog x) t
+| ht_tyabs' e t k : has_type' (k :: Delta) (map (ren_type ↑) Gamma) e t
+                   -> has_type' Delta Gamma (tyabs k e) (pi k t)
+| ht_tmabs' e t1 t2 : has_type' Delta (t1 :: Gamma) e (comp t2)
+                     -> has_type' Delta Gamma (tmabs t1 e) (arrow t1 (comp t2))
+| ht_ret' e t : has_type' Delta Gamma e t
+               -> has_type' Delta Gamma (ret e) (comp t)
+| ht_bind' e1 e2 t1 t2 : has_type' Delta Gamma e1 (comp t1)
+                        -> has_type' Delta (t1 :: Gamma) e2 (comp t2)
+                        -> has_type' Delta Gamma (bind e1 e2) (comp t2)
+| ht_tyapp' e t1 t2 k : has_type' Delta Gamma e (pi k t1)
+                       -> has_kind Delta t2 k
+                       -> has_type' Delta Gamma (tyapp e t2) t1[t2..]
+| ht_tmapp' e1 e2 t1 t2 : has_type' Delta Gamma e1 (arrow t1 (comp t2))
+                         -> has_type' Delta Gamma e2 t1
+                         -> has_type' Delta Gamma (tmapp e1 e2) (comp t2).
+
+Lemma ct_pi' k t t' :
+  conv_type t t' -> conv_type (pi k t) (pi k t').
+Proof.
+  induction 1.
+  - constructor 1. now constructor.
+  - constructor 2.
+  - now constructor 3.
+  - econstructor 4; eauto.
+Qed.
+
+Lemma has_type_has_type' Delta Gamma e t :
+  has_type Delta Gamma e t -> exists t', conv_type t t' /\ has_type' Delta Gamma e t'.
+Proof.
+  induction 1.
+  - exists t. split; try constructor 2. now constructor 1.
+  - destruct IHhas_type as [t' [H1 H2]]. exists (pi k t'). split.
+    + now apply ct_pi'.
+    + now constructor.
+  - destruct IHhas_type as [t' [H1 H2]]. exists (arrow t1 t'). split.
+    + admit.
+    + try constructor. admit.
+  - destruct IHhas_type as [t' [H1 H2]]. exists (comp t'). split.
+    + admit.
+    + now constructor.
+  - destruct IHhas_type1 as [t1' [H1 H2]], IHhas_type2 as [t2' [H3 H4]].
+    exists t2'. split; trivial. try constructor. admit.
+  - destruct IHhas_type as [t' [H1 H2]]. admit.
+  - destruct IHhas_type1 as [t1' [H1 H2]], IHhas_type2 as [t2' [H3 H4]].
+    exists (comp t2). split; try constructor 2. econstructor; eauto. admit.
+  - destruct IHhas_type as [t' [H1 H2]]. exists t'. split; trivial.
+    constructor 3. econstructor 4; eauto. now constructor 3.
+Admitted.
+
+Lemma red_has_type' Delta Gamma e e' t :
+  has_type' Delta Gamma e t -> red_prog e e' -> has_type' Delta Gamma e' t.
+Proof.
+Admitted.
+
+Lemma red_has_type Delta Gamma e e' t :
+  has_type Delta Gamma e t -> red_prog e e' -> has_type Delta Gamma e' t.
+Proof.
+  intros [t' [H1 H2]] % has_type_has_type' H.
+  eapply red_has_type' in H; eauto. admit.
+Admitted.
+
+
 
 
 
