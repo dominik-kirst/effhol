@@ -11,17 +11,25 @@ Import SubstNotations.
 Import CombineNotations.
 Import UnscopedNotations.
 
+(** Notes about the formalisation:
+    - We don't have the base membership formulas.
+    - Type-level conversion is defined by reduction first.
+    - The HOPL deduction system is untyped.
+**)
+
+(* Context lookup *)
+
 Notation lup := nth_error.
 
 Lemma lup_map_el X Y (f : X -> Y) L n y :
   lup (map f L) n = Some y -> exists x, lup L n = Some x /\ y = f x.
 Proof.
-Admitted.
-
-(** Notes about the formalisation:
-    - We don't have the base membership formulas
-    - Type-level conversion is defined by reduction first
-**)
+  revert L. induction n; destruct L; cbn.
+  - discriminate.
+  - intros [=]; subst. now exists x.
+  - discriminate.
+  - apply IHn.
+Qed.
 
 
 
@@ -736,6 +744,21 @@ Proof.
   - econstructor; eauto.
 Qed.
 
+Goal (has_kind (42 :: nil) (var_type 0) 42).
+Proof.
+  now constructor.
+Qed.
+
+Goal (tred_type (app (abs 7 (var_type 0)) (var_type 0)) (var_type 0)).
+Proof.
+  now constructor.
+Qed.
+
+Goal (~ has_kind (42 :: nil) (app (abs 7 (var_type 0)) (var_type 0)) 42).
+Proof.
+  inversion 1.
+Qed.
+
 Lemma has_kind_tred' Delta t t' :
   has_kind Delta t' 0 -> tred_type t t' -> has_kind Delta t 0.
 Proof.
@@ -754,9 +777,89 @@ Proof.
   - now apply IHclos_refl_sym_trans2, IHclos_refl_sym_trans1.
 Abort.
 
+Definition SN (t : type) :=
+  Acc (fun t1 t2 => tred_type t2 t1) t.
+
+Lemma has_kind_SN Delta t k :
+  has_kind Delta t k -> SN t.
+Proof.
+  induction 1.
+  - constructor. intros t'. inversion 1.
+  - clear H H0.
+    induction IHhas_kind1 in t2, IHhas_kind2 |- *.
+    induction IHhas_kind2 in x, H, H0 |- *.
+    constructor. intros t'. inversion 1; subst.
+    + admit.
+    + apply H0; eauto. now constructor.
+    + apply H2; eauto.
+  - constructor. intros t'. inversion 1.
+  - clear H H0.
+    induction IHhas_kind1 in t2, IHhas_kind2 |- *.
+    induction IHhas_kind2 in x, H, H0 |- *.
+    constructor. intros t'. inversion 1; subst.
+    + apply H0; eauto. now constructor.
+    + apply H2; eauto.
+  - clear H. induction IHhas_kind.
+    constructor. intros t'. inversion 1; subst.
+    now apply H0.
+  - clear H. induction IHhas_kind.
+    constructor. intros t'. inversion 1; subst.
+    now apply H0.
+Admitted.
+
+Lemma tred_ret_inv t1 t2 :
+  tred_type (comp t1) (comp t2) -> tred_type t1 t2.
+Proof.
+  inversion 1; subst. trivial.
+Qed.
+
+Lemma conv_ret_inv' t1 t2 t1' t2' :
+  conv_type t1' t2' -> conv_type t1' (comp t1) -> conv_type t2' (comp t2) -> conv_type t1 t2.
+Proof.
+  induction 1 in t1, t2 |- *.
+  - 
+Admitted.
+
+Lemma conv_ret_inv t1 t2 :
+  conv_type (comp t1) (comp t2) -> conv_type t1 t2.
+Proof.
+Admitted.
+
+Lemma ht_ret_inv' Delta Gamma e t e' t' :
+  has_type Delta Gamma e' t' -> e' = ret e -> conv_type t' (comp t) -> has_type Delta Gamma e t.
+Proof.
+  induction 1 in e, t |- *; try discriminate.
+  - intros [=] H' % conv_ret_inv; subst. eapply ht_conv; eauto.
+  - intros H1 H2. apply IHhas_type; trivial. econstructor 4; eauto.
+Qed.
+
+Lemma ht_ret_inv Delta Gamma e t :
+  has_type Delta Gamma (ret e) (comp t) -> has_type Delta Gamma e t.
+Proof.
+  intros H. eapply ht_ret_inv'; eauto. constructor 2.
+Qed.
+
 Lemma red_has_type Delta Gamma e e' t :
   has_type Delta Gamma e t -> red_prog e e' -> has_type Delta Gamma e' t.
 Proof.
+  (* proof by induction on typing *)
+  induction 1 in e' |- *. 1-7: inversion 1; subst.
+  - eapply has_type_subst'; eauto. intros []; cbn.
+    + intros t [=]; subst. apply ht_ret_inv in H.
+    + intros t. apply ht_var.
+  - inversion H; subst. 2: admit. eapply has_type_subst; eauto.
+    + intros []; cbn. intros k' [=]; subst. assumption. intros k'. apply hk_var.
+    + admit.
+  - inversion H; subst. 2: admit. eapply has_type_subst'; eauto.
+    + intros []; cbn. intros k' [=]; subst. assumption. intros k'. apply ht_var.
+  - intros H' % IHhas_type. eapply ht_conv; eauto.
+  Restart.
+
+  (* proof by induction on reduction *)
+  intros H. induction 1 in t, H |- *; subst.
+  - inversion H; subst.
+    + admit.
+    + 
 Admitted.
 
 
