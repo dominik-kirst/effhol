@@ -115,8 +115,8 @@ Section Fw.
   (*Hypothesis ibind_red_prog :
     forall e1 e2 e, red_prog e1 e2 -> red_prog (ibind e1 e) (ibind e2 e).*)
 
-  Hypothesis icomp_conv :
-    forall t t', conv_type t t' -> conv_type (icomp t) (icomp t').
+  Hypothesis icomp_tred :
+    forall t t', tred_type t t' -> tred_type (icomp t) (icomp t').
 
   Hypothesis iafter_conv_prog :
     forall e1 e2 phi, conv_prog e1 e2
@@ -239,12 +239,19 @@ Section Fw.
     - now rewrite <- IHt, icomp_subst.
   Qed.
 
+  Lemma transFw_type_tred t t' :
+    tred_type t t' -> tred_type (transFw_type t) (transFw_type t').
+  Proof.
+    induction 1; cbn in *; try now (econstructor; eauto).
+    - constructor 1. rewrite H. rewrite <- transFw_type_subst. apply ext_type. now intros [].
+    - now apply icomp_tred.
+  Qed.
+
   Lemma transFw_type_conv t t' :
     conv_type t t' -> conv_type (transFw_type t) (transFw_type t').
   Proof.
     induction 1; cbn in *; try now (econstructor; eauto).
-    - constructor 4. rewrite H. rewrite <- transFw_type_subst. apply ext_type. now intros [].
-    - now apply icomp_conv.
+    constructor 1. now apply transFw_type_tred.
   Qed.
 
   Lemma transFw_prog_has_type Delta Gamma e t :

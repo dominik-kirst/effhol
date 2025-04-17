@@ -13,8 +13,14 @@ Import UnscopedNotations.
 
 Notation lup := nth_error.
 
+Lemma lup_map_el X Y (f : X -> Y) L n y :
+  lup (map f L) n = Some y -> exists x, lup L n = Some x /\ y = f x.
+Proof.
+Admitted.
+
 (** Notes about the formalisation:
     - We don't have the base membership formulas
+    - Type-level conversion is defined by reduction first
 **)
 
 
@@ -99,7 +105,7 @@ with conv_spec : spec -> spec -> Prop :=
 Lemma is_value_ren e sig1 sig2 :
   is_value e -> is_value e⟨sig1;sig2⟩.
 Proof.
-  induction 1; cbn in *; econstructor; eauto.
+  destruct 1; cbn in *; econstructor; eauto.
 Qed.
 
 Lemma red_prog_ren e1 e2 sig1 sig2 :
@@ -195,6 +201,33 @@ Proof.
     + fold ren_exp. econstructor 7; eauto. now apply conv_type_ren.
     + fold ren_spec. econstructor 8; eauto. now apply conv_index_ren.
     + fold ren_spec. econstructor 9; eauto.
+Qed.
+
+
+
+(** Reduction and conversion substitution lemmas **)
+
+Lemma tred_type_subst t1 t2 xi :
+  tred_type t1 t2 -> tred_type t1[xi] t2[xi].
+Proof.
+  induction 1 in xi |-*; cbn.
+  - apply ct_beta. rewrite H. now asimpl.
+  - now apply ct_app1.
+  - now apply ct_app2.
+  - now apply ct_arrow1.
+  - now apply ct_arrow2.
+  - now apply ct_pi.
+  - now apply ct_comp.
+Qed.
+
+Lemma conv_type_subst t1 t2 xi :
+  conv_type t1 t2 -> conv_type t1[xi] t2[xi].
+Proof.
+  induction 1 in xi |-*; cbn.
+  - constructor. now apply tred_type_subst.
+  - constructor 2.
+  - constructor 3. apply IHclos_refl_sym_trans.
+  - econstructor 4; [apply IHclos_refl_sym_trans1 | apply IHclos_refl_sym_trans2].
 Qed.
 
 
@@ -431,77 +464,7 @@ Qed.
 
 
 
-(** Conversion lemma **)
-
-Inductive has_type' (Delta : list kind) (Gamma : list type) : prog -> type -> Prop :=
-| ht_var' x t : lup Gamma x = Some t
-               -> has_type' Delta Gamma (var_prog x) t
-| ht_tyabs' e t k : has_type' (k :: Delta) (map (ren_type ↑) Gamma) e t
-                   -> has_type' Delta Gamma (tyabs k e) (pi k t)
-| ht_tmabs' e t1 t2 : has_type' Delta (t1 :: Gamma) e (comp t2)
-                     -> has_type' Delta Gamma (tmabs t1 e) (arrow t1 (comp t2))
-| ht_ret' e t : has_type' Delta Gamma e t
-               -> has_type' Delta Gamma (ret e) (comp t)
-| ht_bind' e1 e2 t1 t2 : has_type' Delta Gamma e1 (comp t1)
-                        -> has_type' Delta (t1 :: Gamma) e2 (comp t2)
-                        -> has_type' Delta Gamma (bind e1 e2) (comp t2)
-| ht_tyapp' e t1 t2 k : has_type' Delta Gamma e (pi k t1)
-                       -> has_kind Delta t2 k
-                       -> has_type' Delta Gamma (tyapp e t2) t1[t2..]
-| ht_tmapp' e1 e2 t1 t2 : has_type' Delta Gamma e1 (arrow t1 (comp t2))
-                         -> has_type' Delta Gamma e2 t1
-                         -> has_type' Delta Gamma (tmapp e1 e2) (comp t2).
-
-Lemma ct_pi' k t t' :
-  conv_type t t' -> conv_type (pi k t) (pi k t').
-Proof.
-  induction 1.
-  - constructor 1. now constructor.
-  - constructor 2.
-  - now constructor 3.
-  - econstructor 4; eauto.
-Qed.
-
-Lemma has_type_has_type' Delta Gamma e t :
-  has_type Delta Gamma e t -> exists t', conv_type t t' /\ has_type' Delta Gamma e t'.
-Proof.
-  induction 1.
-  - exists t. split; try constructor 2. now constructor 1.
-  - destruct IHhas_type as [t' [H1 H2]]. exists (pi k t'). split.
-    + now apply ct_pi'.
-    + now constructor.
-  - destruct IHhas_type as [t' [H1 H2]]. exists (arrow t1 t'). split.
-    + admit.
-    + try constructor. admit.
-  - destruct IHhas_type as [t' [H1 H2]]. exists (comp t'). split.
-    + admit.
-    + now constructor.
-  - destruct IHhas_type1 as [t1' [H1 H2]], IHhas_type2 as [t2' [H3 H4]].
-    exists t2'. split; trivial. try constructor. admit.
-  - destruct IHhas_type as [t' [H1 H2]]. admit.
-  - destruct IHhas_type1 as [t1' [H1 H2]], IHhas_type2 as [t2' [H3 H4]].
-    exists (comp t2). split; try constructor 2. econstructor; eauto. admit.
-  - destruct IHhas_type as [t' [H1 H2]]. exists t'. split; trivial.
-    constructor 3. econstructor 4; eauto. now constructor 3.
-Admitted.
-
-Lemma red_has_type' Delta Gamma e e' t :
-  has_type' Delta Gamma e t -> red_prog e e' -> has_type' Delta Gamma e' t.
-Proof.
-Admitted.
-
-Lemma red_has_type Delta Gamma e e' t :
-  has_type Delta Gamma e t -> red_prog e e' -> has_type Delta Gamma e' t.
-Proof.
-  intros [t' [H1 H2]] % has_type_has_type' H.
-  eapply red_has_type' in H; eauto. admit.
-Admitted.
-
-
-
-
-
-(** Preservation lemmas **)
+(** Judgement substitution lemmas **)
 
 Lemma has_kind_subst Delta Delta' t k sigma :
   has_kind Delta t k
@@ -520,43 +483,6 @@ Proof.
     + intros k' Hk. apply HD in Hk. eapply has_kind_ren; eauto.
   - apply hk_comp. now apply IHhas_kind.
 Qed.
-
-Lemma has_kind_tred Delta t t' k :
-  has_kind Delta t k -> tred_type t t' -> has_kind Delta t' k.
-Proof.
-  intros H H'. revert Delta k H. induction H'; subst; intros k'; inversion 1; subst.
-  - inversion H2; subst. eapply has_kind_subst; eauto.
-    intros []; cbn; try congruence. intros. now constructor.
-  - econstructor; eauto.
-  - econstructor; eauto.
-  - econstructor; eauto.
-  - econstructor; eauto.
-  - econstructor; eauto.
-  - econstructor; eauto.
-Qed.
-
-Lemma has_kind_tred' Delta t t' :
-  has_kind Delta t' 0 -> tred_type t t' -> has_kind Delta t 0.
-Proof.
-  intros H H'. revert Delta H. induction H'; subst; intros.
-  - admit.
-  - inversion H; subst. econstructor; eauto. admit.
-Abort.
-
-Lemma has_kind_conv Delta t t' k :
-  has_kind Delta t k -> conv_type t t' -> has_kind Delta t' k.
-Proof.
-  intros H1 H2. induction H2.
-  - eapply has_kind_tred; eauto.
-  - assumption.
-  - admit.
-  - now apply IHclos_refl_sym_trans2, IHclos_refl_sym_trans1.
-Abort.
-
-Lemma lup_map_el X Y (f : X -> Y) L n y :
-  lup (map f L) n = Some y -> exists x, lup L n = Some x /\ y = f x.
-Proof.
-Admitted.
 
 Lemma has_type_subst Delta Delta' Gamma Gamma' e t sig1 sig2 :
   has_type Delta Gamma e t
@@ -599,6 +525,9 @@ Proof.
   - econstructor 7.
     + eapply IHhas_type1; trivial.
     + eapply IHhas_type2; trivial.
+  - econstructor 8.
+    + apply conv_type_subst, H.
+    + now apply IHhas_type.
 Qed.
 
 Lemma has_type_subst' Delta Gamma Gamma' e t sigma :
@@ -611,27 +540,224 @@ Proof.
   - setoid_rewrite instId'_type. assumption.
 Qed.
 
-Lemma red_has_type Delta Gamma e e' t :
-  has_type Delta Gamma e t -> red_prog e e' -> has_type Delta Gamma e' t.
+
+
+(** Conversion-free typing **)
+
+Inductive has_type' (Delta : list kind) (Gamma : list type) : prog -> type -> Prop :=
+| ht_var' x t : lup Gamma x = Some t
+               -> has_type' Delta Gamma (var_prog x) t
+| ht_tyabs' e t k : has_type' (k :: Delta) (map (ren_type ↑) Gamma) e t
+                   -> has_type' Delta Gamma (tyabs k e) (pi k t)
+| ht_tmabs' e t1 t2 : has_type' Delta (t1 :: Gamma) e (comp t2)
+                     -> has_type' Delta Gamma (tmabs t1 e) (arrow t1 (comp t2))
+| ht_ret' e t : has_type' Delta Gamma e t
+               -> has_type' Delta Gamma (ret e) (comp t)
+| ht_bind' e1 e2 t1 t2 : has_type' Delta Gamma e1 (comp t1)
+                        -> has_type' Delta (t1 :: Gamma) e2 (comp t2)
+                        -> has_type' Delta Gamma (bind e1 e2) (comp t2)
+| ht_tyapp' e t1 t2 k : has_type' Delta Gamma e (pi k t1)
+                       -> has_kind Delta t2 k
+                       -> has_type' Delta Gamma (tyapp e t2) t1[t2..]
+| ht_tmapp' e1 e2 t1 t2 : has_type' Delta Gamma e1 (arrow t1 (comp t2))
+                         -> has_type' Delta Gamma e2 t1
+                         -> has_type' Delta Gamma (tmapp e1 e2) (comp t2).
+
+Lemma has_type'_has_type Delta Gamma e t :
+  has_type' Delta Gamma e t -> has_type Delta Gamma e t.
+Proof.
+  induction 1; econstructor; eauto.
+Qed.
+
+Lemma ct_pi' k t t' :
+  conv_type t t' -> conv_type (pi k t) (pi k t').
+Proof.
+  induction 1.
+  - constructor 1. now constructor.
+  - constructor 2.
+  - now constructor 3.
+  - econstructor 4; eauto.
+Qed.
+
+Lemma has_type_has_type' Delta Gamma e t :
+  has_type Delta Gamma e t -> exists t', conv_type t t' /\ has_type' Delta Gamma e t'.
+Proof.
+  induction 1.
+  - exists t. split; try constructor 2. now constructor 1.
+  - destruct IHhas_type as [t' [H1 H2]]. exists (pi k t'). split.
+    + now apply ct_pi'.
+    + now constructor.
+  - destruct IHhas_type as [t' [H1 H2]]. exists (arrow t1 t'). split.
+    + admit.
+    + try constructor. admit.
+  - destruct IHhas_type as [t' [H1 H2]]. exists (comp t'). split.
+    + admit.
+    + now constructor.
+  - destruct IHhas_type1 as [t1' [H1 H2]], IHhas_type2 as [t2' [H3 H4]].
+    exists t2'. split; trivial. try constructor. admit.
+  - destruct IHhas_type as [t' [H1 H2]]. admit.
+  - destruct IHhas_type1 as [t1' [H1 H2]], IHhas_type2 as [t2' [H3 H4]].
+    exists (comp t2). split; try constructor 2. econstructor; eauto. admit.
+  - destruct IHhas_type as [t' [H1 H2]]. exists t'. split; trivial.
+    constructor 3. econstructor 4; eauto. now constructor 3.
+Admitted.
+
+Lemma has_type'_ren Delta Delta' Gamma Gamma' xi rho e t :
+  has_type' Delta Gamma e t
+  -> (forall n k, lup Delta n = Some k -> lup Delta' (xi n) = Some k)
+  -> (forall n t', lup Gamma n = Some t' -> lup Gamma' (rho n) = Some (ren_type xi t'))
+  -> has_type' Delta' Gamma' (ren_prog xi rho e) (ren_type xi t).
+Proof.
+  induction 1 in xi, rho, Delta', Gamma' |- *; intros HD HG; cbn.
+  - apply ht_var'. now apply HG.
+  - apply ht_tyabs'. apply IHhas_type'.
+    + intros []; cbn; intuition.
+    + intros n0 t' H0. rewrite nth_error_map in H0.
+      destruct (lup Gamma n0) eqn: He; cbn in *; try discriminate.
+      injection H0 as []. erewrite renRen_type, extRen_type, <- renRen_type.
+      * apply map_nth_error. now apply HG.
+      * now intros [].
+  - apply ht_tmabs'. apply IHhas_type'.
+    + intros []; cbn; intuition.
+    + intros []; cbn; intros; try now injection H0 as ->. now apply HG.
+  - apply ht_ret'. apply IHhas_type'; eauto.
+  - apply ht_bind' with t1⟨xi⟩.
+    + apply IHhas_type'1; eauto.
+    + apply IHhas_type'2; eauto. intros []; cbn; intuition.
+      unfold upRen_prog_type. now injection H1 as ->.
+  - cbn. asimpl. erewrite ext_type, <- renSubst_type at 1.
+    + apply ht_tyapp' with k.
+      * apply IHhas_type'; eauto.
+      * eapply has_kind_ren; try apply H0. apply HD.
+    + now intros [].
+  - apply ht_tmapp' with t1⟨xi⟩.
+    + apply IHhas_type'1; eauto.
+    + apply IHhas_type'2; eauto.
+Qed.
+
+Lemma has_type'_subst Delta Delta' Gamma Gamma' e t sig1 sig2 :
+  has_type' Delta Gamma e t
+  -> (forall n k, lup Delta n = Some k -> has_kind Delta' (sig1 n) k)
+  -> (forall n t, lup Gamma n = Some t -> has_type' Delta' Gamma' (sig2 n) t[sig1])
+  -> has_type' Delta' Gamma' (subst_prog sig1 sig2 e) t[sig1].
+Proof.
+  induction 1 in Delta', Gamma', sig1, sig2 |-*; cbn in *; intros H1 H2.
+  - now apply H2.
+  - constructor 2. apply IHhas_type'.
+    + intros [] k'; cbn.
+      * intros [=]; subst. now constructor.
+      * intros H'. apply H1 in H'. eapply has_kind_ren; eauto.
+    + intros n t' H'. apply lup_map_el in H' as [t0[Ht ->]].
+      apply H2 in Ht. asimpl. rewrite <- substRen_type.
+      eapply has_type'_ren; try apply Ht; trivial.
+      intros. now apply map_nth_error.
+  - constructor 3. erewrite ext_prog. apply (IHhas_type' _ _ sig1 (up_prog_prog sig2)); trivial.
+    + intros [] t; cbn.
+      * intros [=]; subst. now constructor.
+      * intros H'. apply H2 in H'. setoid_rewrite <- rinstId'_type at 3.
+        eapply has_type'_ren; try apply H'; cbn; trivial.
+        setoid_rewrite rinstId'_type. trivial.
+    + unfold up_prog_type. intros n. apply rinstId'_type.
+    + reflexivity.
+  - constructor 4. apply IHhas_type'; trivial.
+  - econstructor 5.
+    + eapply IHhas_type'1; trivial.
+    + erewrite ext_prog. apply (IHhas_type'2 _ _ sig1 (up_prog_prog sig2)); trivial.
+      * intros [] t; cbn.
+        -- intros [=]; subst. now constructor.
+        -- intros H'. apply H2 in H'. setoid_rewrite <- rinstId'_type at 3.
+           eapply has_type'_ren; try apply H'; cbn; trivial.
+           setoid_rewrite rinstId'_type. trivial.
+      * unfold up_prog_type. intros n. apply rinstId'_type.
+      * reflexivity.
+  - replace (t1[t2..][sig1]) with (t1[up_type_type sig1][t2[sig1]..]) by now asimpl.
+    econstructor 6. apply IHhas_type'; trivial.
+    eapply has_kind_subst; try apply H0. assumption.
+  - econstructor 7.
+    + eapply IHhas_type'1; trivial.
+    + eapply IHhas_type'2; trivial.
+Qed.
+
+Lemma has_type'_subst' Delta Gamma Gamma' e t sigma :
+  has_type' Delta Gamma e t
+  -> (forall n t, lup Gamma n = Some t -> has_type' Delta Gamma' (sigma n) t)
+  -> has_type' Delta Gamma' (subst_prog var_type sigma e) t.
+Proof.
+  intros. setoid_rewrite <- instId'_type. eapply has_type'_subst; try apply H.
+  - intros. now constructor.
+  - setoid_rewrite instId'_type. assumption.
+Qed.
+
+Lemma red_has_type' Delta Gamma e e' t :
+  has_type' Delta Gamma e t -> red_prog e e' -> has_type' Delta Gamma e' t.
 Proof.
   inversion 1; subst; inversion 1; subst.
-  - eapply has_type_subst'; try apply H1.
+  - eapply has_type'_subst'; try apply H1.
     inversion H0; subst.
     intros [] k; cbn.
     + intros [=]; subst. assumption.
-    + apply ht_var.
+    + apply ht_var'.
   - inversion H0; subst.
-    eapply has_type_subst; try apply H4.
+    eapply has_type'_subst; try apply H4.
     + intros [] k'; cbn.
       * intros [=]; subst. assumption.
       * apply hk_var.
     + intros n t [t'[Ht ->]] % lup_map_el. asimpl. now constructor.
   - inversion H0; subst.
-    eapply has_type_subst'; try apply H4.
+    eapply has_type'_subst'; try apply H4.
     intros [] k; cbn.
     + intros [=]; subst. assumption.
-    + apply ht_var.
+    + apply ht_var'.
 Qed.
+
+Lemma red_has_type0 Delta Gamma e e' t :
+  has_type Delta Gamma e t -> red_prog e e' -> has_type Delta Gamma e' t.
+Proof.
+  intros [t'[H1 H2]] % has_type_has_type' H. econstructor 8.
+  + constructor 3; eauto.
+  + apply has_type'_has_type. eapply red_has_type'; eauto.
+Qed.
+
+
+
+(** Preservation lemmas **)
+
+Lemma has_kind_tred Delta t t' k :
+  has_kind Delta t k -> tred_type t t' -> has_kind Delta t' k.
+Proof.
+  intros H H'. revert Delta k H. induction H'; subst; intros k'; inversion 1; subst.
+  - inversion H2; subst. eapply has_kind_subst; eauto.
+    intros []; cbn; try congruence. intros. now constructor.
+  - econstructor; eauto.
+  - econstructor; eauto.
+  - econstructor; eauto.
+  - econstructor; eauto.
+  - econstructor; eauto.
+  - econstructor; eauto.
+Qed.
+
+Lemma has_kind_tred' Delta t t' :
+  has_kind Delta t' 0 -> tred_type t t' -> has_kind Delta t 0.
+Proof.
+  intros H H'. revert Delta H. induction H'; subst; intros.
+  - admit.
+  - inversion H; subst. econstructor; eauto. admit.
+Abort.
+
+Lemma has_kind_conv Delta t t' k :
+  has_kind Delta t k -> conv_type t t' -> has_kind Delta t' k.
+Proof.
+  intros H1 H2. induction H2.
+  - eapply has_kind_tred; eauto.
+  - assumption.
+  - admit.
+  - now apply IHclos_refl_sym_trans2, IHclos_refl_sym_trans1.
+Abort.
+
+Lemma red_has_type Delta Gamma e e' t :
+  has_type Delta Gamma e t -> red_prog e e' -> has_type Delta Gamma e' t.
+Proof.
+Admitted.
 
 
 
