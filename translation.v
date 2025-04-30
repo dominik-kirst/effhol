@@ -728,108 +728,67 @@ Qed.
 
 
 
-(** Preservation lemmas **)
+(** Subject reduction **)
 
-Lemma has_kind_tred Delta t t' k :
-  has_kind Delta t k -> tred_type t t' -> has_kind Delta t' k.
-Proof.
-  intros H H'. revert Delta k H. induction H'; subst; intros k'; inversion 1; subst.
-  - inversion H2; subst. eapply has_kind_subst; eauto.
-    intros []; cbn; try congruence. intros. now constructor.
-  - econstructor; eauto.
-  - econstructor; eauto.
-  - econstructor; eauto.
-  - econstructor; eauto.
-  - econstructor; eauto.
-  - econstructor; eauto.
-Qed.
-
-Goal (has_kind (42 :: nil) (var_type 0) 42).
-Proof.
-  now constructor.
-Qed.
-
-Goal (tred_type (app (abs 7 (var_type 0)) (var_type 0)) (var_type 0)).
-Proof.
-  now constructor.
-Qed.
-
-Goal (~ has_kind (42 :: nil) (app (abs 7 (var_type 0)) (var_type 0)) 42).
-Proof.
-  inversion 1.
-Qed.
-
-Lemma has_kind_tred' Delta t t' :
-  has_kind Delta t' 0 -> tred_type t t' -> has_kind Delta t 0.
-Proof.
-  intros H H'. revert Delta H. induction H'; subst; intros.
-  - admit.
-  - inversion H; subst. econstructor; eauto. admit.
-Abort.
-
-Lemma has_kind_conv Delta t t' k :
-  has_kind Delta t k -> conv_type t t' -> has_kind Delta t' k.
-Proof.
-  intros H1 H2. induction H2.
-  - eapply has_kind_tred; eauto.
-  - assumption.
-  - admit.
-  - now apply IHclos_refl_sym_trans2, IHclos_refl_sym_trans1.
-Abort.
-
-Definition SN (t : type) :=
-  Acc (fun t1 t2 => tred_type t2 t1) t.
-
-Lemma has_kind_SN Delta t k :
-  has_kind Delta t k -> SN t.
-Proof.
-  induction 1.
-  - constructor. intros t'. inversion 1.
-  - clear H H0.
-    induction IHhas_kind1 in t2, IHhas_kind2 |- *.
-    induction IHhas_kind2 in x, H, H0 |- *.
-    constructor. intros t'. inversion 1; subst.
-    + admit.
-    + apply H0; eauto. now constructor.
-    + apply H2; eauto.
-  - constructor. intros t'. inversion 1.
-  - clear H H0.
-    induction IHhas_kind1 in t2, IHhas_kind2 |- *.
-    induction IHhas_kind2 in x, H, H0 |- *.
-    constructor. intros t'. inversion 1; subst.
-    + apply H0; eauto. now constructor.
-    + apply H2; eauto.
-  - clear H. induction IHhas_kind.
-    constructor. intros t'. inversion 1; subst.
-    now apply H0.
-  - clear H. induction IHhas_kind.
-    constructor. intros t'. inversion 1; subst.
-    now apply H0.
-Admitted.
-
-Lemma tred_ret_inv t1 t2 :
+Lemma tred_comp_inv t1 t2 :
   tred_type (comp t1) (comp t2) -> tred_type t1 t2.
 Proof.
   inversion 1; subst. trivial.
 Qed.
 
-Lemma conv_ret_inv' t1 t2 t1' t2' :
-  conv_type t1' t2' -> conv_type t1' (comp t1) -> conv_type t2' (comp t2) -> conv_type t1 t2.
+Inductive treds_type : type -> type -> Prop :=
+| ct_tred t t' : tred_type t t' -> treds_type t t'
+| ct_refl t : treds_type t t
+| ct_trans t t' t'' : tred_type t t' -> treds_type t' t'' -> treds_type t t''.
+
+Lemma treds_comp_inv t1 t2 :
+  treds_type (comp t1) (comp t2) -> treds_type t1 t2.
 Proof.
-  induction 1 in t1, t2 |- *.
-  - 
+  remember (comp t1) as t. remember (comp t2) as t'.
+  induction 1 in t1, t2, Heqt, Heqt' |- *; subst.
+  - constructor 1. now apply tred_comp_inv.
+  - injection Heqt'. intros ->. constructor 2.
+  - inversion H; subst. eapply ct_trans; eauto.
+Qed.
+
+Lemma Church_Rosser t t1 t2 :
+  treds_type t t1 -> treds_type t t2 -> exists t', treds_type t1 t' /\ treds_type t2 t'.
+Proof.
 Admitted.
 
-Lemma conv_ret_inv t1 t2 :
+Lemma Church_Rosser' t1 t2 :
+  conv_type t1 t2 -> exists t, treds_type t1 t /\ treds_type t2 t.
+Proof.
+  induction 1.
+  - exists y. admit.
+  - exists x. admit.
+  - firstorder eauto.
+  - admit.
+Admitted.
+
+Lemma treds_comp_inv' t1 t2' :
+  treds_type (comp t1) t2' -> exists t2, t2' = comp t2.
+Proof.
+  remember (comp t1) as t1'.
+  induction 1 in t1, Heqt1' |- *; subst.
+  - inversion H; subst. now exists t2.
+  - now exists t1.
+  - inversion H; subst. eapply IHtreds_type. reflexivity.
+Qed.
+
+Lemma conv_comp_inv t1 t2 :
   conv_type (comp t1) (comp t2) -> conv_type t1 t2.
 Proof.
+  intros (t & H1 & H2) % Church_Rosser'.
+  destruct (treds_comp_inv' H1) as [t1' ->].
+  apply treds_comp_inv in H1, H2. admit.
 Admitted.
 
 Lemma ht_ret_inv' Delta Gamma e t e' t' :
   has_type Delta Gamma e' t' -> e' = ret e -> conv_type t' (comp t) -> has_type Delta Gamma e t.
 Proof.
   induction 1 in e, t |- *; try discriminate.
-  - intros [=] H' % conv_ret_inv; subst. eapply ht_conv; eauto.
+  - intros [=] H' % conv_comp_inv; subst. eapply ht_conv; eauto.
   - intros H1 H2. apply IHhas_type; trivial. econstructor 4; eauto.
 Qed.
 
@@ -845,7 +804,7 @@ Proof.
   (* proof by induction on typing *)
   induction 1 in e' |- *. 1-7: inversion 1; subst.
   - eapply has_type_subst'; eauto. intros []; cbn.
-    + intros t [=]; subst. apply ht_ret_inv in H.
+    + intros t [=]; subst. now apply ht_ret_inv in H.
     + intros t. apply ht_var.
   - inversion H; subst. 2: admit. eapply has_type_subst; eauto.
     + intros []; cbn. intros k' [=]; subst. assumption. intros k'. apply hk_var.
@@ -853,13 +812,6 @@ Proof.
   - inversion H; subst. 2: admit. eapply has_type_subst'; eauto.
     + intros []; cbn. intros k' [=]; subst. assumption. intros k'. apply ht_var.
   - intros H' % IHhas_type. eapply ht_conv; eauto.
-  Restart.
-
-  (* proof by induction on reduction *)
-  intros H. induction 1 in t, H |- *; subst.
-  - inversion H; subst.
-    + admit.
-    + 
 Admitted.
 
 
