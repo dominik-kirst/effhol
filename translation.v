@@ -12,9 +12,10 @@ Import CombineNotations.
 Import UnscopedNotations.
 
 (** Notes about the formalisation:
-    - We don't have the base membership formulas.
+    - We don't have the base membership formulas to avoid redundancy.
     - Type-level conversion is defined by reduction first.
-    - The HOPL deduction system is untyped.
+    - The HOPL deduction system is untyped for simplicity.
+    - We just have the minimal reduction rules.
 **)
 
 (* Context lookup *)
@@ -53,6 +54,7 @@ Inductive red_prog : prog -> prog -> Prop :=
 
 Inductive tred_type : type -> type -> Prop :=
 | ct_beta k t1 t2 t : t = subst_type (t2..) t1 -> tred_type (app (abs k t1) t2) t
+| ct_abs k t1 t2 : tred_type t1 t2 -> tred_type (abs k t1) (abs k t2)
 | ct_app1 t1 t2 t : tred_type t1 t2 -> tred_type (app t1 t) (app t2 t)
 | ct_app2 t1 t2 t : tred_type t1 t2 -> tred_type (app t t1) (app t t2)
 | ct_arrow1 t1 t2 t : tred_type t1 t2 -> tred_type (arrow t1 t) (arrow t2 t)
@@ -137,6 +139,7 @@ Lemma tred_type_ren t1 t2 xi :
 Proof.
   induction 1 in xi |-*; cbn.
   - apply ct_beta. rewrite H. now asimpl.
+  - now apply ct_abs.
   - now apply ct_app1.
   - now apply ct_app2.
   - now apply ct_arrow1.
@@ -220,6 +223,7 @@ Lemma tred_type_subst t1 t2 xi :
 Proof.
   induction 1 in xi |-*; cbn.
   - apply ct_beta. rewrite H. now asimpl.
+  - now apply ct_abs.
   - now apply ct_app1.
   - now apply ct_app2.
   - now apply ct_arrow1.
@@ -550,6 +554,257 @@ Qed.
 
 
 
+(** Church-Rosser property **)
+
+Inductive treds_type : type -> type -> Prop :=
+| ct_tred t t' : tred_type t t' -> treds_type t t'
+| ct_refl t : treds_type t t
+| ct_trans t t' t'' : tred_type t t' -> treds_type t' t'' -> treds_type t t''.
+
+Lemma treds_type_trans t1 t2 t3 :
+  treds_type t1 t2 -> treds_type t2 t3 -> treds_type t1 t3.
+Proof.
+  induction 1 in t3 |- *.
+  - now apply ct_trans.
+  - tauto.
+  - intros H' % IHtreds_type. eapply ct_trans; eauto.
+Qed.
+
+Inductive ptred : type -> type -> Prop :=
+| pt_var x : ptred (var_type x) (var_type x)
+| pt_beta k t1 t2 t1' t2' t : t = subst_type (t2'..) t1' -> ptred t1 t1' -> ptred t2 t2' -> ptred (app (abs k t1) t2) t
+| pt_abs k t1 t2 : ptred t1 t2 -> ptred (abs k t1) (abs k t2)
+| pt_app t1 t2 t1' t2' : ptred t1 t1' -> ptred t2 t2' -> ptred (app t1 t2) (app t1' t2')
+| pt_arrow t1 t2 t1' t2' : ptred t1 t1' -> ptred t2 t2' -> ptred (arrow t1 t2) (arrow t1' t2')
+| pt_pi t1 t2 k : ptred t1 t2 -> ptred (pi k t1) (pi k t2)
+| pt_comp t1 t2 : ptred t1 t2 -> ptred (comp t1) (comp t2).
+
+Inductive ptreds : type -> type -> Prop :=
+| pt_ptred t t' : ptred t t' -> ptreds t t'
+| pt_trans t t' t'' : ptred t t' -> ptreds t' t'' -> ptreds t t''.
+
+Lemma treds_app1 t1 t2 t :
+  treds_type t1 t2 -> treds_type (app t1 t) (app t2 t).
+Proof.
+  induction 1.
+  - constructor. now apply ct_app1.
+  - constructor 2.
+  - econstructor 3; eauto. now apply ct_app1.
+Qed.
+
+Lemma treds_app2 t1 t2 t :
+  treds_type t1 t2 -> treds_type (app t t1) (app t t2).
+Proof.
+  induction 1.
+  - constructor. now apply ct_app2.
+  - constructor 2.
+  - econstructor 3; eauto. now apply ct_app2.
+Qed.
+
+Lemma treds_arrow1 t1 t2 t :
+  treds_type t1 t2 -> treds_type (arrow t1 t) (arrow t2 t).
+Proof.
+  induction 1.
+  - constructor. now apply ct_arrow1.
+  - constructor 2.
+  - econstructor 3; eauto. now apply ct_arrow1.
+Qed.
+
+Lemma treds_arrow2 t1 t2 t :
+  treds_type t1 t2 -> treds_type (arrow t t1) (arrow t t2).
+Proof.
+  induction 1.
+  - constructor. now apply ct_arrow2.
+  - constructor 2.
+  - econstructor 3; eauto. now apply ct_arrow2.
+Qed.
+
+Lemma treds_abs t1 t2 k :
+  treds_type t1 t2 -> treds_type (abs k t1) (abs k t2).
+Proof.
+  induction 1.
+  - constructor. now apply ct_abs.
+  - constructor 2.
+  - econstructor 3; eauto. now apply ct_abs.
+Qed.
+
+Lemma treds_pi t1 t2 k :
+  treds_type t1 t2 -> treds_type (pi k t1) (pi k t2).
+Proof.
+  induction 1.
+  - constructor. now apply ct_pi.
+  - constructor 2.
+  - econstructor 3; eauto. now apply ct_pi.
+Qed.
+
+Lemma treds_comp t1 t2 :
+  treds_type t1 t2 -> treds_type (comp t1) (comp t2).
+Proof.
+  induction 1.
+  - constructor. now apply ct_comp.
+  - constructor 2.
+  - econstructor 3; eauto. now apply ct_comp.
+Qed.
+
+Lemma ptred_treds t t' :
+  ptred t t' -> treds_type t t'.
+Proof.
+  induction 1.
+  - constructor 2.
+  - eapply treds_type_trans. 2: constructor; apply ct_beta; eauto.
+    eapply treds_type_trans.
+    + apply treds_app1, treds_abs, IHptred1.
+    + apply treds_app2, IHptred2.
+  - now apply treds_abs.
+  - eapply treds_type_trans.
+    + apply treds_app1. eauto.
+    + eapply treds_app2. eauto.
+  - eapply treds_type_trans.
+    + apply treds_arrow1. eauto.
+    + eapply treds_arrow2. eauto.
+  - now apply treds_pi.
+  - now apply treds_comp.
+Qed.
+
+Lemma ptreds_treds t t' :
+  ptreds t t' -> treds_type t t'.
+Proof.
+  induction 1.
+  - now apply ptred_treds.
+  - eapply treds_type_trans; eauto. now apply ptred_treds.
+Qed.
+
+Lemma ptred_refl t :
+  ptred t t.
+Proof.
+  induction t; now constructor.
+Qed.
+
+Lemma tred_ptred t t' :
+  tred_type t t' -> ptred t t'.
+Proof.
+  induction 1; econstructor; eauto; apply ptred_refl.
+Qed.
+
+Lemma treds_ptreds t t' :
+  treds_type t t' -> ptreds t t'.
+Proof.
+  induction 1.
+  - constructor 1. now apply tred_ptred.
+  - constructor 1. apply ptred_refl.
+  - econstructor 2; eauto. now apply tred_ptred.
+Qed.
+
+Fixpoint maxred t :=
+  match t with
+  | var_type x => var_type x
+  | app (abs k t) t' => subst_type ((maxred t')..) (maxred t)
+  | app t t' => app (maxred t) (maxred t')
+  | abs k t => abs k (maxred t)
+  | arrow t t' => arrow (maxred t) (maxred t')
+  | pi k t => pi k (maxred t)
+  | comp t => comp (maxred t)
+  end.
+
+Lemma ptred_ren t1 t1' xi :
+  ptred t1 t1' -> ptred t1⟨xi⟩ t1'⟨xi⟩.
+Proof.
+  induction 1 in xi |- *; cbn; try now (constructor; eauto).
+  subst. econstructor; eauto. now asimpl.
+Qed.
+
+Lemma ptred_subst t1 t1' sig sig' :
+  ptred t1 t1' -> (forall n, ptred (sig n) (sig' n)) -> ptred t1[sig] t1'[sig'].
+Proof.
+  induction 1 in sig, sig' |- *; cbn; intros H'; try now (constructor; eauto).
+  - apply H'.
+  - subst. econstructor; eauto. 2: apply (IHptred1 _ (up_type_type sig')).
+    + now asimpl.
+    + intros []; cbn; try constructor. apply ptred_ren, H'.
+  - constructor. apply IHptred. intros []; cbn; try constructor. apply ptred_ren, H'.
+  - constructor. apply IHptred. intros []; cbn; try constructor. apply ptred_ren, H'.
+Qed.
+
+Lemma ptred_subst' t1 t1' t2 t2' :
+  ptred t1 t1' -> ptred t2 t2' -> ptred t1[t2..] t1'[t2'..].
+Proof.
+  intros H1 H2. apply ptred_subst; trivial.
+  intros []; cbn; trivial. constructor.
+Qed.
+
+Lemma maxred_ptred t t' :
+  ptred t t' -> ptred t' (maxred t).
+Proof.
+  induction t in t' |- *; inversion 1; subst; cbn.
+  - constructor.
+  - apply ptred_subst'; eauto.
+    specialize (IHt1 (abs k t1') (pt_abs _ H3)).
+    cbn in IHt1. inversion IHt1; subst. apply H1.
+  - destruct t1; cbn.
+    + inversion H2; subst. constructor; eauto.
+    + inversion H2; subst; constructor; eauto.
+    + inversion H2; subst. eapply pt_beta; eauto.
+      specialize (IHt1 (abs n t3) (pt_abs _ H5)).
+    cbn in IHt1. inversion IHt1; subst. apply H1.
+    + inversion H2; subst. constructor; eauto.
+    + inversion H2; subst. constructor; eauto.
+    + inversion H2; subst. constructor; eauto.
+  - constructor. eauto.
+  - constructor; eauto.
+  - constructor. eauto.
+  - constructor. eauto.
+Qed.
+
+Lemma Diamond_ptred t t1 t2 :
+  ptred t t1 -> ptred t t2 -> { t' | ptred t1 t' /\ ptred t2 t' }.
+Proof.
+  intros H1 H2. exists (maxred t). split; now apply maxred_ptred.
+Qed.
+
+Lemma Church_Rosser_ptreds' t t1 t2 :
+  ptred t t1 -> ptreds t t2 -> exists t', ptreds t1 t' /\ ptred t2 t'.
+Proof.
+  intros H. induction 1 in t1, H |- *.
+  - destruct (Diamond_ptred H H0) as (t0 & H1 & H2).
+    exists t0. split; trivial. now constructor.
+  - destruct (Diamond_ptred H H0) as (t0 & H2 & H3).
+    destruct (IHptreds t0 H3) as (t2 & H4 & H5).
+    exists t2. split; trivial. econstructor 2; eauto.
+Qed.
+
+Lemma Church_Rosser_ptreds t t1 t2 :
+  ptreds t t1 -> ptreds t t2 -> exists t', ptreds t1 t' /\ ptreds t2 t'.
+Proof.
+  induction 1 in t2 |-*; intros H1.
+  - destruct (Church_Rosser_ptreds' H H1) as (t1 & H2 & H3).
+    exists t1. split; trivial. now constructor.
+  - destruct (Church_Rosser_ptreds' H H1) as (t1 & H2 & H3).
+    destruct (IHptreds t1 H2) as (t3 & H4 & H5).
+    exists t3. split; trivial. econstructor 2; eauto.
+Qed.
+
+Lemma Church_Rosser t t1 t2 :
+  treds_type t t1 -> treds_type t t2 -> exists t', treds_type t1 t' /\ treds_type t2 t'.
+Proof.
+  intros H1 % treds_ptreds H2 % treds_ptreds.
+  destruct (Church_Rosser_ptreds H1 H2) as [t' H].
+  exists t'. split; apply ptreds_treds, H.
+Qed.
+
+Lemma Church_Rosser' t1 t2 :
+  conv_type t1 t2 -> exists t, treds_type t1 t /\ treds_type t2 t.
+Proof.
+  induction 1.
+  - exists y. split; now constructor.
+  - exists x. split; now constructor.
+  - firstorder eauto.
+  - destruct IHclos_refl_sym_trans1 as [t1 H1], IHclos_refl_sym_trans2 as [t2 H2].
+    destruct (@Church_Rosser y t1 t2) as [t Ht]; intuition.
+    exists t. split; eapply treds_type_trans; eauto.
+Qed.
+
+
+
 (** Subject reduction **)
 
 Lemma conv_type_comp t t' :
@@ -562,11 +817,6 @@ Proof.
   - econstructor 4; eauto.
 Qed.
 
-Inductive treds_type : type -> type -> Prop :=
-| ct_tred t t' : tred_type t t' -> treds_type t t'
-| ct_refl t : treds_type t t
-| ct_trans t t' t'' : tred_type t t' -> treds_type t' t'' -> treds_type t t''.
-
 Lemma treds_conv t t' :
   treds_type t t' -> conv_type t t'.
 Proof.
@@ -574,32 +824,6 @@ Proof.
   - now constructor 1.
   - constructor 2.
   - econstructor 4; eauto. now constructor 1.
-Qed.
-
-Lemma treds_type_trans t1 t2 t3 :
-  treds_type t1 t2 -> treds_type t2 t3 -> treds_type t1 t3.
-Proof.
-  induction 1 in t3 |- *.
-  - now apply ct_trans.
-  - tauto.
-  - intros H' % IHtreds_type. eapply ct_trans; eauto.
-Qed.
-
-Lemma Church_Rosser t t1 t2 :
-  treds_type t t1 -> treds_type t t2 -> exists t', treds_type t1 t' /\ treds_type t2 t'.
-Proof.
-Admitted.
-
-Lemma Church_Rosser' t1 t2 :
-  conv_type t1 t2 -> exists t, treds_type t1 t /\ treds_type t2 t.
-Proof.
-  induction 1.
-  - exists y. split; now constructor.
-  - exists x. split; now constructor.
-  - firstorder eauto.
-  - destruct IHclos_refl_sym_trans1 as [t1 H1], IHclos_refl_sym_trans2 as [t2 H2].
-    destruct (@Church_Rosser y t1 t2) as [t Ht]; intuition.
-    exists t. split; eapply treds_type_trans; eauto.
 Qed.
 
 Lemma treds_comp_inv' t1 t2' :
