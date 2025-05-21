@@ -10,7 +10,7 @@ This repository contains the Coq development of our paper on effectful higher-or
 - `HOL.v`: type system and deduction system of HOL
 - `EffHOL.v`: type system and deduction system of EffHOL
 - `EffHOL_to_HOL.v`: forgetful translation from EffHOL to HOL
-- `HOL_to_EffHOL.v`: the realizability translation from HOL to EffHOL, including typing judgements and deduction systems
+- `HOL_to_EffHOL.v`: the realizability translation from HOL to EffHOL
 - `EffHOL_to_Fw.v`: syntactic instantiations and correctness theorems
 
 ## Notes about the formalisation:
