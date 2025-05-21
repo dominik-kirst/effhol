@@ -1,9 +1,15 @@
 -R . ""
 
+-arg -w -arg -notation-overridden
+COQDOCFLAGS = "--charset utf-8 -s --with-header docs/resources/header.html --with-footer docs/resources/footer.html --index indexpage"
+
 core.v
 unscoped.v
 core_axioms.v
 unscoped_axioms.v
-hopl.v
-translation.v
-instantiation.v
+syntax.v
+HOL.v
+EffHOL.v
+HOL_to_EffHOL.v
+EffHOL_to_HOL.v
+EffHOL_to_Fw.v

@@ -2,7 +2,7 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 
 Require Import List.
-Require Import core unscoped hopl translation.
+Require Import core unscoped syntax HOL EffHOL HOL_to_EffHOL.
 
 Import RenNotations.
 Import SubstNotations.
@@ -11,9 +11,7 @@ Import UnscopedNotations.
 
 Notation lup := nth_error.
 
-
-
-(** * Instantiation into System F_w *)
+(** Instantiation into System F_w **)
 
 (* Specification of System F_w *)
 
