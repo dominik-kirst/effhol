@@ -1,4 +1,4 @@
-(*** Specification of EffHOL *)
+(** * Specification of EffHOL *)
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -316,6 +316,32 @@ with is_spec (Delta : list kind) (Gamma : list type) (Sigma : list index) : spec
                         -> has_index Delta Gamma Sigma q (ref t o)
                         -> has_index Delta Gamma Sigma q' o
                         -> is_spec Delta Gamma Sigma (spholds q q' e).
+
+
+
+(** Judgement weakening lemmas **)
+
+Lemma lup_app X (A B : list X) n x :
+  lup A n = Some x -> lup (A ++ B) n = Some x.
+Proof.
+  intros H. rewrite nth_error_app1; trivial. apply nth_error_Some. congruence.
+Qed.
+
+Lemma has_kind_weak Delta Delta' t k :
+  has_kind Delta t k -> has_kind (Delta ++ Delta') t k.
+Proof.
+  induction 1; cbn; try now (econstructor; eauto).
+  constructor. now apply lup_app.
+Qed.
+
+Lemma has_type_weak Delta Delta' Gamma Gamma' e t :
+  has_type Delta Gamma e t -> has_type (Delta ++ Delta') (Gamma ++ Gamma') e t.
+Proof.
+  induction 1 in Delta', Gamma' |- *; cbn; try now (econstructor; eauto).
+  - constructor. now apply lup_app.
+  - constructor. rewrite map_app. eauto.
+  - econstructor; eauto. now apply has_kind_weak.
+Qed.
 
 
 
