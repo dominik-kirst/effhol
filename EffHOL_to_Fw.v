@@ -570,7 +570,7 @@ Section Fw.
     - econstructor 13; eauto. now apply transFw_spec_conv.
   Qed.
 
-  (** ** Combined translation of iHOL into F_w *)
+  (** ** Combined translation of HOL into F_w *)
 
   Definition trans_T' psi :=
     transFw_type (trans_T psi).
