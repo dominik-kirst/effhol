@@ -1,4 +1,4 @@
-(** * HOL Specification *)
+(** * Specification of HOL *)
 
 Set Implicit Arguments.
 Unset Strict Implicit.
