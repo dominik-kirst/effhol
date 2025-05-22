@@ -262,8 +262,8 @@ Inductive has_type (Delta : list kind) (Gamma : list type) : prog -> type -> Pro
                -> has_type Delta Gamma (var_prog x) t
 | ht_tyabs e t k : has_type (k :: Delta) (map (ren_type ↑) Gamma) e t
                    -> has_type Delta Gamma (tyabs k e) (pi k t)
-| ht_tmabs e t1 t2 : has_type Delta (t1 :: Gamma) e (comp t2)
-                     -> has_type Delta Gamma (tmabs t1 e) (arrow t1 (comp t2))
+| ht_tmabs e t1 t2 : has_type Delta (t1 :: Gamma) e t2
+                     -> has_type Delta Gamma (tmabs t1 e) (arrow t1 t2)
 | ht_ret e t : has_type Delta Gamma e t
                -> has_type Delta Gamma (ret e) (comp t)
 | ht_bind e1 e2 t1 t2 : has_type Delta Gamma e1 (comp t1)
@@ -272,9 +272,9 @@ Inductive has_type (Delta : list kind) (Gamma : list type) : prog -> type -> Pro
 | ht_tyapp e t1 t2 k : has_type Delta Gamma e (pi k t1)
                        -> has_kind Delta t2 k
                        -> has_type Delta Gamma (tyapp e t2) t1[t2..]
-| ht_tmapp e1 e2 t1 t2 : has_type Delta Gamma e1 (arrow t1 (comp t2))
+| ht_tmapp e1 e2 t1 t2 : has_type Delta Gamma e1 (arrow t1 t2)
                          -> has_type Delta Gamma e2 t1
-                         -> has_type Delta Gamma (tmapp e1 e2) (comp t2)
+                         -> has_type Delta Gamma (tmapp e1 e2) t2
 | ht_conv e t1 t2 : conv_type t1 t2
                     -> has_type Delta Gamma e t1
                     -> has_type Delta Gamma e t2.
@@ -816,16 +816,6 @@ Qed.
 
 (** ** Subject reduction **)
 
-Lemma conv_type_comp t t' :
-  conv_type t t' -> conv_type (comp t) (comp t').
-Proof.
-  induction 1.
-  - constructor 1. now constructor.
-  - constructor 2.
-  - now constructor 3.
-  - econstructor 4; eauto.
-Qed.
-
 Lemma treds_conv t t' :
   treds_type t t' -> conv_type t t'.
 Proof.
@@ -928,37 +918,37 @@ Proof.
 Qed.
 
 Lemma treds_arrow_inv' t1 t2 t' :
-  treds_type (arrow t1 (comp t2)) t' -> exists t1' t2', t' = arrow t1' (comp t2').
+  treds_type (arrow t1 t2) t' -> exists t1' t2', t' = arrow t1' t2'.
 Proof.
-  remember (arrow t1 (comp t2)) as t.
+  remember (arrow t1 t2) as t.
   induction 1 in t1, t2, Heqt |- *; subst.
   - inversion H; subst.
     + now exists t3, t2.
-    + inversion H3; subst. now exists t1, t4.
+    + now exists t1, t3.
   - now exists t1, t2.
   - inversion H; subst.
     + eapply IHtreds_type. reflexivity.
-    + inversion H4; subst. eapply IHtreds_type. reflexivity.
+    + eapply IHtreds_type. reflexivity.
 Qed.
 
 Lemma treds_arrow_inv t1 t2 t1' t2' :
-  treds_type (arrow t1 (comp t2)) (arrow t1' (comp t2')) -> treds_type t1 t1' /\ treds_type t2 t2'.
+  treds_type (arrow t1 t2) (arrow t1' t2') -> treds_type t1 t1' /\ treds_type t2 t2'.
 Proof.
-  remember (arrow t1 (comp t2)) as t. remember (arrow t1' (comp t2')) as t'.
+  remember (arrow t1 t2) as t. remember (arrow t1' t2') as t'.
   induction 1 in t1, t2, Heqt, Heqt' |- *; subst.
   - inversion H; subst.
     + split; try constructor 2. now constructor 1.
-    + split; try constructor 2. inversion H1; subst. now constructor 1.
+    + split; try constructor 2. now constructor 1.
   - injection Heqt'. intros -> ->. split; constructor 2.
   - inversion H; subst; split.
     + eapply ct_trans; eauto. now apply (IHtreds_type t3 t2).
     + now apply (IHtreds_type t3 t2).
-    + inversion H4; subst. now apply (IHtreds_type t1 t4).
-    + inversion H4; subst. eapply ct_trans; eauto. now apply (IHtreds_type t1 t4).
+    + now apply (IHtreds_type t1 t3).
+    + eapply ct_trans; eauto. now apply (IHtreds_type t1 t3).
 Qed.
 
 Lemma conv_arrow_inv t1 t2 t1' t2' :
-  conv_type (arrow t1 (comp t2)) (arrow t1' (comp t2')) -> conv_type t1 t1' /\ conv_type t2 t2'.
+  conv_type (arrow t1 t2) (arrow t1' t2') -> conv_type t1 t1' /\ conv_type t2 t2'.
 Proof.
   intros (t'' & H1 & H2) % Church_Rosser'.
   destruct (treds_arrow_inv' H1) as [t [t' ->]].
@@ -970,18 +960,18 @@ Proof.
 Qed.
 
 Lemma ht_tmabs_inv' Delta Gamma e t t1 t2 e' t' :
-  has_type Delta Gamma e' t' -> e' = tmabs t e -> conv_type t' (arrow t1 (comp t2))
-    -> has_type Delta (t :: Gamma) e (comp t2) /\ conv_type t t1.
+  has_type Delta Gamma e' t' -> e' = tmabs t e -> conv_type t' (arrow t1 t2)
+    -> has_type Delta (t :: Gamma) e t2 /\ conv_type t t1.
 Proof.
   induction 1 in e, t |- *; try discriminate.
   - intros [=] H'; subst. apply conv_arrow_inv in H' as [H1 H2].
-    split; trivial. eapply ht_conv; eauto. now apply conv_type_comp.
+    split; trivial. eapply ht_conv; eauto.
   - intros H1 H2. apply IHhas_type; trivial. econstructor 4; eauto.
 Qed.
 
 Lemma ht_tmabs_inv Delta Gamma e t t1 t2 :
-  has_type Delta Gamma (tmabs t e) (arrow t1 (comp t2))
-    -> has_type Delta (t :: Gamma) e (comp t2) /\ conv_type t t1.
+  has_type Delta Gamma (tmabs t e) (arrow t1 t2)
+    -> has_type Delta (t :: Gamma) e t2 /\ conv_type t t1.
 Proof.
   intros H. eapply ht_tmabs_inv'; eauto. constructor 2. 
 Qed.
