@@ -319,7 +319,7 @@ with is_spec (Delta : list kind) (Gamma : list type) (Sigma : list index) : spec
 
 
 
-(** Judgement weakening lemmas **)
+(** ** Judgement weakening lemmas **)
 
 Lemma lup_app X (A B : list X) n x :
   lup A n = Some x -> lup (A ++ B) n = Some x.
