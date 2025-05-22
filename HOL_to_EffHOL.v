@@ -1,3 +1,5 @@
+(* * Translation from HOL to EffHOL **)
+
 Set Implicit Arguments.
 Unset Strict Implicit.
 
@@ -11,7 +13,9 @@ Import SubstNotations.
 Import CombineNotations.
 Import UnscopedNotations.
 
-(** Translation from HOL to HOPL **)
+
+
+(* ** Translation functions **)
 
 Fixpoint trans_I (s : sort) (t : type) : index :=
   match s with 
@@ -68,7 +72,7 @@ Definition trans_SL Psi :=
 
 
 
-(** Translation substitution lemmas **)
+(* ** Translation substitution lemmas **)
 
 Lemma trans_I_subst s t sigma :
   (trans_I s t)[sigma] = trans_I s t[sigma].
@@ -204,7 +208,7 @@ Qed.
 
 
 
-(** Translation well-formedness lemmas **)
+(* ** Translation well-formedness lemmas **)
 
 Lemma trans_is_index Xi s t :
   has_kind Xi t s -> is_index Xi (trans_I s t).
@@ -310,7 +314,7 @@ Qed.
 
 
 
-(** Soundness theorem **)
+(* ** Soundness theorem **)
 
 Lemma trans_SL_lup' Psi psi n i :
    lup Psi i = Some psi -> lup (trans_SL' Psi n) i = Some (trans_S psi (var_prog (n + i))).
