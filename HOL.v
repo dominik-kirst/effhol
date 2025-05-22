@@ -1,4 +1,4 @@
-(* * HOL Specification *)
+(** * HOL Specification *)
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -15,13 +15,9 @@ Import UnscopedNotations.
 
 
 
-(* ** Context lookup *)
+(** ** Typing judgements **)
 
 Notation lup := nth_error.
-
-
-
-(* ** Typing judgements **)
 
 Definition sort := nat.
 
@@ -36,7 +32,7 @@ with is_prop (Xi : list sort) : form -> Prop :=
 
 
 
-(* ** HOL deduction system **)
+(** ** HOL deduction system **)
 
 Inductive HOL_prv (A : list form) : form -> Prop :=
 | HOL_CTX phi : In phi A -> HOL_prv A phi
@@ -56,7 +52,7 @@ Qed.
 
 
 
-(* ** Typed HOL deduction system **)
+(** ** Typed HOL deduction system **)
 
 Inductive THOL_prv (Xi : list sort) (A : list form) : form -> Prop :=
 | THOL_CTX phi : In phi A -> is_prop Xi phi -> THOL_prv Xi A phi

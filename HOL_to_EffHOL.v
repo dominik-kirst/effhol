@@ -1,4 +1,4 @@
-(* * Translation from HOL to EffHOL **)
+(** * Translation from HOL to EffHOL **)
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -15,7 +15,7 @@ Import UnscopedNotations.
 
 
 
-(* ** Translation functions **)
+(** ** Translation functions **)
 
 Fixpoint trans_I (s : sort) (t : type) : index :=
   match s with 
@@ -72,7 +72,7 @@ Definition trans_SL Psi :=
 
 
 
-(* ** Translation substitution lemmas **)
+(** ** Translation substitution lemmas **)
 
 Lemma trans_I_subst s t sigma :
   (trans_I s t)[sigma] = trans_I s t[sigma].
@@ -208,7 +208,7 @@ Qed.
 
 
 
-(* ** Translation well-formedness lemmas **)
+(** ** Translation well-formedness lemmas **)
 
 Lemma trans_is_index Xi s t :
   has_kind Xi t s -> is_index Xi (trans_I s t).
@@ -314,7 +314,7 @@ Qed.
 
 
 
-(* ** Soundness theorem **)
+(** ** Soundness theorem **)
 
 Lemma trans_SL_lup' Psi psi n i :
    lup Psi i = Some psi -> lup (trans_SL' Psi n) i = Some (trans_S psi (var_prog (n + i))).
@@ -336,74 +336,6 @@ Proof.
   induction Psi in n |- *; cbn; trivial.
   rewrite IHPsi. now rewrite rinstInst'_spec, trans_S_subst_spec.
 Qed.
-
-Theorem soundness' Psi psi :
-  HOL_prv Psi psi -> exists e, HOPL_prv (trans_SL Psi) (after e (trans_S psi (var_prog 0))).
-Proof.
-  induction 1.
-  - apply In_nth_error in H as [n Hn]. exists (ret (var_prog n)). apply HOPL_MI, HOPL_CTX.
-    apply trans_SL_lup in Hn. apply nth_error_In in Hn. now rewrite trans_S_subst_spec.
-  - destruct IHHOL_prv as [e He]. exists (ret (tmabs (trans_T phi) e)).
-    apply HOPL_MI. cbn. asimpl. apply HOPL_EAI, HOPL_II. cbn in He.
-    replace (after e (trans_S psi (var_prog 0))) with
-      (subst_spec var_type (e..) var_exp (after (var_prog 0) (ren_spec id swap id (trans_S psi (var_prog 0))))) in He.
-    + apply HOPL_RED with (e1 := tmapp (tmabs (trans_T phi) e ⟨id;swap⟩) (var_prog 0)) in He.
-      * cbn in He. asimpl in He. eapply HOPL_eq; try apply He.
-        -- rewrite !trans_S_subst_spec. f_equal. now rewrite <- trans_SL_up.
-        -- f_equal. now rewrite !trans_S_subst_spec.
-      * apply rp_betatm; try apply iv_var. asimpl. rewrite idSubst_prog; trivial. now intros [].
-    + cbn. asimpl. unfold funcomp. f_equal. apply idSubst_spec; try now intros [].
-  - destruct IHHOL_prv1 as [e1 H1], IHHOL_prv2 as [e2 H2].
-    exists (bind e1 (bind e2⟨id;S⟩ (tmapp (var_prog 1) (var_prog 0)))).
-    apply HOPL_ME. eapply HOPL_MM; try apply H1. apply HOPL_ME.
-    eapply HOPL_MM with (trans_S phi (var_prog 0)).
-    2: { eapply HOPL_weak. eapply HOPL_eq. apply (@HOPL_ren id S id). apply H2.
-         reflexivity. cbn. now rewrite rinstInst'_spec, trans_S_subst_spec. firstorder. }
-    eapply HOPL_IE. 2: apply HOPL_CTX; now left.
-    eapply HOPL_eq. 2: reflexivity.
-    eapply HOPL_EAE with (e := var_prog 0). apply HOPL_CTX.
-    right. cbn. now left. cbn. asimpl. unfold funcomp.
-    now rewrite rinstInst'_spec, !trans_S_subst_spec.
-  - destruct IHHOL_prv as [e He]. exists (ret (tyabs s e)).
-    apply HOPL_MI. cbn. asimpl. apply HOPL_TAI, HOPL_SAI.
-    replace (after e (trans_S phi (var_prog 0))) with
-      (subst_spec var_type (e..) var_exp (after (var_prog 0) (ren_spec id swap id (trans_S phi (var_prog 0))))) in He.
-    + apply HOPL_RED with (e1 := tyapp (tyabs s e ⟨swap;id⟩) (var_type 0)) in He.
-      * cbn in He. asimpl in He. erewrite map_map, map_ext, <- trans_SL_ren.
-        -- rewrite trans_S_subst_spec in He. cbn in He. erewrite ext_spec.
-           rewrite trans_S_subst_spec. 2,4: now intros []. 2: reflexivity. cbn. apply He.
-        -- intros psi. now asimpl.
-      * apply rp_betaty. asimpl. rewrite idSubst_prog; trivial. now intros [].
-    + cbn. asimpl. unfold funcomp. f_equal. apply idSubst_spec; now intros [].
-  - destruct IHHOL_prv as [e He]. exists (bind e (tyapp (var_prog 0) (ttrans_T p))).
-    apply HOPL_ME. eapply HOPL_MM; try apply He. cbn.
-    eapply HOPL_eq. eapply HOPL_SAE with (q := ttrans_E p).
-    eapply HOPL_eq. eapply HOPL_TAE with (t := ttrans_T p).
-    2,4: reflexivity. apply HOPL_CTX. now left.
-    + cbn. reflexivity.
-    + cbn. f_equal.
-      * now asimpl.
-      * rewrite substSubst_spec, <- trans_S_subst'.
-        rewrite !substRen_spec, renSubst_spec.
-        apply ext_spec; intros []; cbn; trivial.
-        -- now asimpl.
-        -- now rewrite !ttrans_E_ren.
-  - destruct IHHOL_prv as [e He]. exists e. eapply HOPL_MM; eauto. cbn. eapply HOPL_CONV.
-    + apply cs_sym, cs_holds_exp1, ce_beta. reflexivity.
-    + cbn. apply HOPL_CI. asimpl. apply HOPL_CTX. left.
-      change (var_prog 0) with (subst_prog var_type (var_prog 0 .: var_prog) (var_prog 0)).
-      rewrite <- trans_S_subst_spec, <- trans_S_subst'. asimpl. unfold funcomp.
-      apply ext_spec; trivial. intros []; trivial. cbn. now rewrite ttrans_E_subst_exp.
-  - destruct IHHOL_prv as [e He]. exists e. eapply HOPL_MM; eauto. cbn.
-    eapply HOPL_eq. 2: reflexivity. eapply HOPL_CE. eapply HOPL_CONV.
-    eapply cs_holds_exp1. eapply ce_beta. 2: apply HOPL_CTX; now left.
-    cbn. reflexivity. asimpl. unfold funcomp.
-    change (var_prog 0) with (subst_prog var_type (var_prog 0 .: var_prog) (var_prog 0)) at 3.
-    rewrite <- trans_S_subst_spec, <- trans_S_subst'. asimpl. unfold funcomp.
-    apply ext_spec; trivial. intros []; trivial. now rewrite ttrans_E_subst_exp.
-Qed.
-
-Print Assumptions soundness'.
 
 Lemma soundness_typing_check Xi Psi psi p :
   is_prop Xi psi

@@ -1,4 +1,4 @@
-(* * Specification of EffHOL *)
+(*** Specification of EffHOL *)
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -15,23 +15,7 @@ Import UnscopedNotations.
 
 
 
-(* ** Context lookup *)
-
-Notation lup := nth_error.
-
-Lemma lup_map_el X Y (f : X -> Y) L n y :
-  lup (map f L) n = Some y -> exists x, lup L n = Some x /\ y = f x.
-Proof.
-  revert L. induction n; destruct L; cbn.
-  - discriminate.
-  - intros [=]; subst. now exists x.
-  - discriminate.
-  - apply IHn.
-Qed.
-
-
-
-(* ** Reduction and conversion **)
+(** ** Reduction and conversion **)
 
 Inductive is_value : prog -> Prop :=
 | iv_var x : is_value (var_prog x)
@@ -107,7 +91,7 @@ with conv_spec : spec -> spec -> Prop :=
 
 
 
-(* ** Reduction and conversion renaming lemmas **)
+(** ** Reduction and conversion renaming lemmas **)
 
 Lemma is_value_ren e sig1 sig2 :
   is_value e -> is_value e⟨sig1;sig2⟩.
@@ -213,7 +197,7 @@ Qed.
 
 
 
-(* ** Reduction and conversion substitution lemmas **)
+(** ** Reduction and conversion substitution lemmas **)
 
 Lemma tred_type_subst t1 t2 xi :
   tred_type t1 t2 -> tred_type t1[xi] t2[xi].
@@ -241,7 +225,19 @@ Qed.
 
 
 
-(* ** Typing judgements **)
+(** ** Typing judgements **)
+
+Notation lup := nth_error.
+
+Lemma lup_map_el X Y (f : X -> Y) L n y :
+  lup (map f L) n = Some y -> exists x, lup L n = Some x /\ y = f x.
+Proof.
+  revert L. induction n; destruct L; cbn.
+  - discriminate.
+  - intros [=]; subst. now exists x.
+  - discriminate.
+  - apply IHn.
+Qed.
 
 Definition kind := nat.
 
@@ -323,7 +319,7 @@ with is_spec (Delta : list kind) (Gamma : list type) (Sigma : list index) : spec
 
 
 
-(* ** Judgement renaming lemmas **)
+(** ** Judgement renaming lemmas **)
 
 Lemma has_kind_ren Delta Delta' t k xi :
   has_kind Delta t k
@@ -463,7 +459,7 @@ Qed.
 
 
 
-(* ** Judgement substitution lemmas **)
+(** ** Judgement substitution lemmas **)
 
 Lemma has_kind_subst Delta Delta' t k sigma :
   has_kind Delta t k
@@ -541,7 +537,7 @@ Qed.
 
 
 
-(* ** Church-Rosser property **)
+(** ** Church-Rosser property **)
 
 Inductive treds_type : type -> type -> Prop :=
 | ct_tred t t' : tred_type t t' -> treds_type t t'
@@ -792,7 +788,7 @@ Qed.
 
 
 
-(* ** Subject reduction **)
+(** ** Subject reduction **)
 
 Lemma conv_type_comp t t' :
   conv_type t t' -> conv_type (comp t) (comp t').
@@ -983,7 +979,7 @@ Qed.
 
 
 
-(* ** EffHOL deduction system **)
+(** ** EffHOL deduction system **)
 
 Definition swap := 0 .: (↑ >> ↑).
 

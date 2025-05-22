@@ -1,4 +1,4 @@
-(* * Instantiation into System F_w *)
+(** * Instantiation into System F_w *)
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -15,7 +15,7 @@ Notation lup := nth_error.
 
 
 
-(* ** Specification of System F_w *)
+(** ** Specification of System F_w *)
 
 Inductive has_typeFw (Delta : list kind) (Gamma : list type) : prog -> type -> Prop :=
 | ht_var x t : lup Gamma x = Some t
@@ -97,14 +97,14 @@ Inductive Fw_prv (A : list spec) : spec -> Prop :=
 
 Section Fw.
 
-  (* ** Syntax components *)
+  (** ** Syntax components *)
 
   Variable icomp : type -> type.
   Variable iret : prog -> prog.
   Variable ibind : prog -> prog -> prog.
   Variable iafter : prog -> spec -> spec.
 
-  (* ** Assumptions about reduction and conversion *)
+  (** ** Assumptions about reduction and conversion *)
 
   (*Hypothesis iret_is_value :
     forall e, is_value (iret e).*)
@@ -126,7 +126,7 @@ Section Fw.
     forall e phi psi, conv_spec phi psi
       -> conv_spec (iafter e phi) (iafter e psi).
 
-  (* ** Assumptions about substitution *)
+  (** ** Assumptions about substitution *)
 
   Hypothesis icomp_subst :
     forall sigma t, (icomp t) [sigma] = icomp (t [sigma]).
@@ -142,7 +142,7 @@ Section Fw.
     forall xi1 xi2 xi3 e phi, subst_spec xi1 xi2 xi3 (iafter e phi)
       = iafter (subst_prog xi1 xi2 e) (subst_spec (up_prog_type xi1) (up_prog_prog xi2) (up_prog_exp xi3) phi).
 
-  (* ** Assumptions about typing judgements *)
+  (** ** Assumptions about typing judgements *)
 
   Hypothesis icomp_has_kind :
     forall Delta t, has_kind Delta t 0 -> has_kind Delta (icomp t) 0.
@@ -160,7 +160,7 @@ Section Fw.
       -> has_typeFw Delta Gamma e (icomp t)
       -> is_specFw Delta Gamma Sigma (iafter e phi).
 
-  (* ** Assumptions about deductions *)
+  (** ** Assumptions about deductions *)
 
   Hypothesis iafter_ret :
     forall A phi e, Fw_prv A (subst_spec var_type (e..) var_exp phi)
@@ -175,7 +175,7 @@ Section Fw.
       -> Fw_prv A (iafter e phi)
       -> Fw_prv A (iafter e psi).
 
-  (* ** Translation of types and preservation lemma *)
+  (** ** Translation of types and preservation lemma *)
 
   Fixpoint transFw_type (t : type) : type :=
     match t with
@@ -193,7 +193,7 @@ Section Fw.
     induction 1; cbn; try econstructor; eauto.
   Qed.
 
-  (* ** Translation of programs and preservation lemma *)
+  (** ** Translation of programs and preservation lemma *)
     
   Fixpoint transFw_prog (e : prog) : prog :=
     match e with
@@ -271,7 +271,7 @@ Section Fw.
     - econstructor 6; eauto. now apply transFw_type_conv.
   Qed.
 
-  (* ** Translation of indices and preservation lemma *)
+  (** ** Translation of indices and preservation lemma *)
 
   Fixpoint transFw_index (o : index) : index :=
     match o with
@@ -289,7 +289,7 @@ Section Fw.
     - constructor. assumption.
   Qed.
 
-  (* ** Translation of specifications and expressions and preservation lemmas *)
+  (** ** Translation of specifications and expressions and preservation lemmas *)
 
   Fixpoint transFw_spec (phi : spec) : spec :=
     match phi with
@@ -365,7 +365,7 @@ Section Fw.
       + econstructor 5; eauto. now apply transFw_index_conv.
   Qed.
 
-  (* ** Soundness of translation of HOPL into F_w *)
+  (** ** Soundness of translation of HOPL into F_w *)
 
   Lemma transFw_prog_ren xi1 xi2 e :
     ren_prog xi1 xi2 (transFw_prog e)
@@ -570,7 +570,7 @@ Section Fw.
     - econstructor 13; eauto. now apply transFw_spec_conv.
   Qed.
 
-  (* ** Combined translation of iHOL into F_w *)
+  (** ** Combined translation of iHOL into F_w *)
 
   Definition trans_T' psi :=
     transFw_type (trans_T psi).

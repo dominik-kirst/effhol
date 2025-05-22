@@ -1,4 +1,4 @@
-(* * Translation from EffHOL to HOL **)
+(** * Translation from EffHOL to HOL **)
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -15,7 +15,7 @@ Import UnscopedNotations.
 
 
 
-(* ** Translation functions **)
+(** ** Translation functions **)
 
 Fixpoint trans_sort (o : index) : sort :=
   match o with
@@ -41,7 +41,7 @@ with trans_term (q : exp) : term :=
   | exapp q t => trans_term q
 end.
 
-(* ** Simple lemmas **)
+(** ** Simple lemmas **)
 
 Lemma trans_sort_ren o xi :
   trans_sort o⟨xi⟩ = trans_sort o.
@@ -169,7 +169,7 @@ Proof.
     + now apply trans_form_conv in H as ->.
 Qed.
 
-(* ** Main result **)
+(** ** Main result **)
 
 Lemma HOPL_HOL A phi :
   HOPL_prv A phi -> HOL_prv (map trans_form A) (trans_form phi).
@@ -208,3 +208,5 @@ Lemma Consistency fal :
 Proof.
   intros _ _ H % HOPL_HOL. assumption.
 Qed.
+
+Print Assumptions Consistency.
